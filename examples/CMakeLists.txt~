@@ -1,0 +1,10 @@
+## Copyright 2018-2020 Intel Corporation
+## SPDX-License-Identifier: Apache-2.0
+
+# build ospTutorial, for demonstration and API testing
+
+# C++ version
+add_executable(ospTutorial_mtvCpp ${OSPRAY_RESOURCE} multivariant.cpp)
+target_link_libraries(ospTutorial_mtvCpp PRIVATE ospray_sdk)
+ospray_sign_target(ospTutorial_mtvCpp)
+
