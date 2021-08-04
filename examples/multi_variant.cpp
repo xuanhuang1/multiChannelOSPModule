@@ -38,15 +38,14 @@
 // stl
 #include <random>
 #include <vector>
-#include <string>
-#include <deque>
 
-#define GLFW_INCLUDE_NONE
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-// imgui
-#include "imgui.h"
-#include "imgui_impl_glfw_gl3.h"
+
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <GL/glut.h>
+
+#include <imgui.h>
+
 
 using namespace rkcommon;
 using namespace rkcommon::math;
@@ -57,12 +56,8 @@ vec2i imgSize{1024, 768};
 vec2i windowSize{1024,768};
 unsigned int texture;
 
-GLFWwindow *glfwWindow = nullptr;
 
-static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
-static const std::vector<std::string> blendModeStr = {"add", "alpha blend"};
-
-class GLFWOSPWindow{
+class GLUTOSP_OBJECTS{
 public:
   ospray::cpp::Camera camera{"perspective"};
   ospray::cpp::Renderer renderer{"multivariant"};
@@ -73,17 +68,13 @@ public:
   bool middleDown = false;
   vec2f previousMouse{vec2f(-1)};
   
-  static GLFWOSPWindow *activeWindow;
+  static GLUTOSP_OBJECTS *activeObj;
   ospray::cpp::FrameBuffer framebuffer;
   std::unique_ptr<ArcballCamera> arcballCamera;
 
-  int tfnType = 0;
-  int blendMode = 0;
-  std::vector<int> renderAttributesData;
-  std::deque<bool> renderAttributeSelection;
   
-  GLFWOSPWindow(){
-    activeWindow = this;
+  GLUTOSP_OBJECTS(){
+    activeObj = this;
     
     /// prepare framebuffer
     auto buffers = OSP_FB_COLOR | OSP_FB_DEPTH | OSP_FB_ACCUM | OSP_FB_ALBEDO
@@ -91,22 +82,22 @@ public:
     framebuffer = ospray::cpp::FrameBuffer(imgSize.x, imgSize.y, OSP_FB_RGBA32F, buffers);
     
   }
-  
   void display();
-  void motion(double, double);
+  void motion(int, int);
   void mouse(int, int, int, int);
-  void reshape(int, int);
-    
+  
   void setFunc(){
-
-    glfwSetCursorPosCallback(
-      glfwWindow, [](GLFWwindow *, double x, double y) {
-		    activeWindow->motion(x, y);
+    glutMouseFunc([](int button, int state, int x, int y){
+		    activeObj->mouse(button, state, x, y);
 		  });
-    glfwSetFramebufferSizeCallback(
-      glfwWindow, [](GLFWwindow *, int newWidth, int newHeight) {
-        activeWindow->reshape(newWidth, newHeight);
-      });
+
+    glutMotionFunc([](int x, int y){
+		    activeObj->motion(x, y);
+		  });
+    
+    glutDisplayFunc([](){
+		      activeObj->display();
+		  });
 
     
   }
@@ -116,15 +107,18 @@ public:
     // render one frame
     framebuffer.renderFrame(renderer, camera, world);
   }
-
-  void buildUI();
 };
 
-GLFWOSPWindow *GLFWOSPWindow::activeWindow = nullptr;
+GLUTOSP_OBJECTS *GLUTOSP_OBJECTS::activeObj = nullptr;
 
-void GLFWOSPWindow::display()
+
+
+void GLUTOSP_OBJECTS::display()
 { 
   
+   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+   glEnable(GL_TEXTURE_2D);
+   glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
    glBindTexture(GL_TEXTURE_2D, texture);
    // render textured quad with OSPRay frame buffer contents
    
@@ -158,98 +152,38 @@ void GLFWOSPWindow::display()
    glVertex2f(windowSize.x, 0.f);
 
    glEnd();
-}
-
-bool tfnTypeUI_callback(void *, int index, const char **out_text)
-{
-  *out_text = tfnTypeStr[index].c_str();
-  return true;
-}
-
-bool blendModeUI_callback(void *, int index, const char **out_text)
-{
-  *out_text = blendModeStr[index].c_str();
-  return true;
+   //glFlush();
+   
+   glutSwapBuffers();
+   glDisable(GL_TEXTURE_2D);
+   glutPostRedisplay();
 }
 
 
-void GLFWOSPWindow::buildUI(){
-  ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
-  ImGui::Begin("Another Window", nullptr, flags);
-  ImGui::Text("Hello from another window!");
-  static int whichtfnType = 0;
-  static int whichBlendMode = 0;
-  
-  if (ImGui::Combo("tfn##whichtfnType",
-		   &whichtfnType,
-		   tfnTypeUI_callback,
-		   nullptr,
-		   tfnTypeStr.size())) {
-     tfnType = whichtfnType;
-     renderer.setParam("tfnType", tfnType); 
-     renderer.commit();
-  }
+void GLUTOSP_OBJECTS::mouse(int button, int state,int x, int y){
+  leftDown = (button == GLUT_LEFT_BUTTON);
+  rightDown = (button == GLUT_RIGHT_BUTTON);
+  middleDown = (button == GLUT_MIDDLE_BUTTON);
 
-  if (ImGui::Combo("blendMode##whichBlendMode",
-		   &whichBlendMode,
-		   blendModeUI_callback,
-		   nullptr,
-		   blendModeStr.size())) {
-     blendMode = whichBlendMode;
-     renderer.setParam("blendMode", blendMode); 
-     renderer.commit();
-  }
-  
-  if (ImGui::TreeNode("Selection State: Multiple Selection"))
-    {
-      bool renderAttributeChanged = false;
-      for (uint32_t n = 0; n < renderAttributesData.size(); n++)
-	{
-	  if(ImGui::Checkbox(std::to_string(renderAttributesData[n]).c_str(),
-			     &renderAttributeSelection[n]))
-	    renderAttributeChanged = true;
-	}
-      if (renderAttributeChanged){
-	// rebuild attribute list to render
-	std::vector<int> renderAttributes;
-        for (uint32_t i=0; i< renderAttributesData.size(); i++){
-	  if (renderAttributeSelection[i])
-	    renderAttributes.push_back(i);
-	}
-    
-	renderer.setParam("renderAttributes", ospray::cpp::CopiedData(renderAttributes));
-	renderer.commit();
-      }
-      
-      ImGui::TreePop();
-    }
-
-  
-  
-  ImGui::End();
-
+  if (state == GLUT_UP)
+    previousMouse = vec2f(-1);
 }
 
-void GLFWOSPWindow::motion(double x, double y)
-{
+void GLUTOSP_OBJECTS::motion(int x, int y){
   const vec2f mouse(x, y);
   if (previousMouse != vec2f(-1)) {
-    const bool leftDown =
-      glfwGetMouseButton(glfwWindow, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-    const bool rightDown =
-      glfwGetMouseButton(glfwWindow, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
-    const bool middleDown =
-      glfwGetMouseButton(glfwWindow, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS;
     const vec2f prev = previousMouse;
 
     bool cameraChanged = leftDown || rightDown || middleDown;
+    //std::cout << leftDown << "   mouse left \n";
 
     if (leftDown) {
       const vec2f mouseFrom(clamp(prev.x * 2.f / windowSize.x - 1.f, -1.f, 1.f),
-			    clamp(prev.y * 2.f / windowSize.y - 1.f, -1.f, 1.f));
+          clamp(prev.y * 2.f / windowSize.y - 1.f, -1.f, 1.f));
       const vec2f mouseTo(clamp(mouse.x * 2.f / windowSize.x - 1.f, -1.f, 1.f),
-			  clamp(mouse.y * 2.f / windowSize.y - 1.f, -1.f, 1.f));
+          clamp(mouse.y * 2.f / windowSize.y - 1.f, -1.f, 1.f));
       arcballCamera->rotate(mouseFrom, mouseTo);
+      //std::cout << "r" << mouseFrom.x << " " <<mouseFrom.y << " "<< mouseTo.x <<" "<<mouseTo.y <<"\n";
     } else if (rightDown) {
       arcballCamera->zoom(mouse.y - prev.y);
     } else if (middleDown) {
@@ -258,7 +192,6 @@ void GLFWOSPWindow::motion(double x, double y)
 
     if (cameraChanged) {
       //updateCamera();
-      //addObjectToCommit(camera.handle());
       camera.setParam("aspect", windowSize.x / float(windowSize.y));
       camera.setParam("position", arcballCamera->eyePos());
       camera.setParam("direction", arcballCamera->lookDir());
@@ -273,30 +206,14 @@ void GLFWOSPWindow::motion(double x, double y)
 
 
 
-void GLFWOSPWindow::reshape(int w, int h)
+void reshape(int w, int h)
 {
-  
   windowSize.x = w;
   windowSize.y = h;
-  
-  // create new frame buffer
-  auto buffers = OSP_FB_COLOR | OSP_FB_DEPTH | OSP_FB_ACCUM | OSP_FB_ALBEDO
-      | OSP_FB_NORMAL;
-  framebuffer =
-    ospray::cpp::FrameBuffer(windowSize.x, windowSize.y, OSP_FB_RGBA32F, buffers);
-  framebuffer.commit();
-  
   glViewport(0, 0, windowSize.x, windowSize.y);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
   glOrtho(0.0, windowSize.x, 0.0, windowSize.y, -1.0, 1.0);
-
-  // update camera
-  arcballCamera->updateWindowSize(windowSize);
-
-  camera.setParam("aspect", windowSize.x / float(windowSize.y));
-  camera.commit();
-
 }
 
 void init (void* fb){
@@ -306,6 +223,8 @@ void init (void* fb){
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
     // set the texture wrapping/filtering options (on the currently bound texture object)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     // load and generate the texture
@@ -318,7 +237,7 @@ void init (void* fb){
 		 0,
 		 GL_RGBA,
 		 GL_FLOAT,
-		 fb);
+		 fb);    
 
 }
 
@@ -398,7 +317,7 @@ int main(int argc, const char **argv)
   // use scoped lifetimes of wrappers to release everything before ospShutdown()
   {
     
-    GLFWOSPWindow glfwOspWindow;
+    GLUTOSP_OBJECTS glutOsp_objs;
 
     // create and setup model and mesh
     vec3i volumeDimensions{128};
@@ -438,109 +357,71 @@ int main(int argc, const char **argv)
 
     // put the instance in the world
     //ospray::cpp::World world;
-    glfwOspWindow.world.setParam("instance", ospray::cpp::CopiedData(instance));
+    glutOsp_objs.world.setParam("instance", ospray::cpp::CopiedData(instance));
 
     // create and setup light for Ambient Occlusion
     ospray::cpp::Light light("ambient");
     light.commit();
 
-    glfwOspWindow.world.setParam("light", ospray::cpp::CopiedData(light));
-    glfwOspWindow.world.commit();
+    glutOsp_objs.world.setParam("light", ospray::cpp::CopiedData(light));
+    glutOsp_objs.world.commit();
 
     // create renderer, choose Scientific Visualization renderer
     // load multivariant renderer module
-    ospray::cpp::Renderer *renderer = &glfwOspWindow.renderer;
+    ospray::cpp::Renderer *renderer = &glutOsp_objs.renderer;
     //ospray::cpp::Renderer renderer("scivis");
     std::cout << "using multivariant renderer \n";
 
     // fill in attribute render array
     // render all attributes here
-    for (uint32_t i=0; i< voxels.size(); i++){
-      glfwOspWindow.renderAttributesData.push_back(i);
-      glfwOspWindow.renderAttributeSelection.push_back(true);
-    }
+    std::vector<int> renderAttributesData;
+    for (int i=0; i< voxels.size(); i++)
+      renderAttributesData.push_back(i);
     
     // complete setup of renderer
     renderer->setParam("aoSamples", 1);
-    renderer->setParam("backgroundColor", 1.f); // white, transparent
-    renderer->setParam("blendMode", glfwOspWindow.blendMode); // 0:add color 1: alpha blend
-    renderer->setParam("renderAttributes", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesData));
-    renderer->setParam("tfnType", glfwOspWindow.tfnType); // 0:same tfn all channel 1: pick evenly on hue
+    renderer->setParam("backgroundColor", 1.0f); // white, transparent
+    renderer->setParam("blendMode", 1); // 0:add color 1: alpha blend
+    renderer->setParam("renderAttributes", ospray::cpp::CopiedData(renderAttributesData));
+    renderer->setParam("tfnType", 0); // 0:same tfn all channel 1: pick evenly on hue
     renderer->commit();
 
     // create and setup camera
     
     // set up arcball camera for ospray
-    glfwOspWindow.arcballCamera.reset(new ArcballCamera(glfwOspWindow.world.getBounds<box3f>(), windowSize));
+    glutOsp_objs.arcballCamera.reset(new ArcballCamera(glutOsp_objs.world.getBounds<box3f>(), windowSize));
+    glutOsp_objs.arcballCamera->eyePos() = cam_pos;
+    glutOsp_objs.arcballCamera->lookDir() = cam_view;
+    glutOsp_objs.arcballCamera->upDir() = cam_up;
     
-    glfwOspWindow.arcballCamera->updateWindowSize(windowSize);
+    glutOsp_objs.arcballCamera->updateWindowSize(windowSize);
     
-    ospray::cpp::Camera* camera = &glfwOspWindow.camera;
+    ospray::cpp::Camera* camera = &glutOsp_objs.camera;
     camera->setParam("aspect", imgSize.x / (float)imgSize.y);
-    camera->setParam("position", glfwOspWindow.arcballCamera->eyePos());
-    camera->setParam("direction", glfwOspWindow.arcballCamera->lookDir());
-    camera->setParam("up", glfwOspWindow.arcballCamera->upDir());
+    camera->setParam("position", glutOsp_objs.arcballCamera->eyePos());
+    camera->setParam("direction", glutOsp_objs.arcballCamera->lookDir());
+    camera->setParam("up", glutOsp_objs.arcballCamera->upDir());
     camera->commit(); // commit each object to indicate modifications are done
 
     
-    glfwOspWindow.renderNewFrame();
+    glutOsp_objs.renderNewFrame();
 
-    // initialize GLFW
-    if (!glfwInit()) {
-      throw std::runtime_error("Failed to initialize GLFW!");
-    }
-
-    glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
-    // create GLFW window
-    glfwWindow = glfwCreateWindow(windowSize.x, windowSize.y, "OSPRay Tutorial", nullptr, nullptr);
-
-    if (!glfwWindow) {
-      glfwTerminate();
-      throw std::runtime_error("Failed to create GLFW window!");
-    }
-
-    // make the window's context current
-    glfwMakeContextCurrent(glfwWindow);
-
-    ImGui_ImplGlfwGL3_Init(glfwWindow, true);
-    ImGui::StyleColorsDark();
     
-    auto fb = glfwOspWindow.framebuffer.map(OSP_FB_COLOR);
+    glutInit(&argc, (char**)argv);
+    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB | GLUT_DEPTH);
+    glutInitWindowSize(windowSize.x, windowSize.y);
+    glutInitWindowPosition(100, 100);
+    glutCreateWindow(argv[0]);
+       
+    auto fb = glutOsp_objs.framebuffer.map(OSP_FB_COLOR);
     init(fb);
-    glfwOspWindow.framebuffer.unmap(fb);
-    glfwOspWindow.setFunc();
-    glfwOspWindow.reshape(windowSize.x, windowSize.y);
+    glutOsp_objs.framebuffer.unmap(fb);
+ 
+    glutReshapeFunc(reshape);
+    glutOsp_objs.setFunc();
+    glutMainLoop();
 
-    glfwSetInputMode(glfwWindow, GLFW_STICKY_KEYS, GL_TRUE);
-
-    do{
-      
-      glClear(GL_COLOR_BUFFER_BIT);
-      glEnable(GL_TEXTURE_2D);
-      
-      ImGui_ImplGlfwGL3_NewFrame();
-      glfwOspWindow.buildUI();
-
-      
-      glEnable(GL_FRAMEBUFFER_SRGB); // Turn on sRGB conversion for OSPRay frame
-      glfwOspWindow.display();
-      glDisable(GL_FRAMEBUFFER_SRGB); // Disable SRGB conversion for UI
-      glDisable(GL_TEXTURE_2D);
-      
-      ImGui::Render();
-      ImGui_ImplGlfwGL3_Render();
-      
-      // Swap buffers
-      glfwSwapBuffers(glfwWindow);
-      
-      glfwPollEvents();
-
-    } // Check if the ESC key was pressed or the window was closed
-    while( glfwGetKey(glfwWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS &&
-	   glfwWindowShouldClose(glfwWindow) == 0 );
-    
-   ImGui_ImplGlfwGL3_Shutdown();
-   glfwTerminate();
+   
    // rkcommon::utility::writePPM(
    //     "mtv_accumulatedFrameCpp.ppm", imgSize.x, imgSize.y, fb);
 

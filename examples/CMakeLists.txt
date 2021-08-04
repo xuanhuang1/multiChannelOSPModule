@@ -6,7 +6,7 @@
 # prefer libGL over libOpenGl for better compatibility with SWR
 set(OpenGL_GL_PREFERENCE "LEGACY")
 find_package(OpenGL 2 REQUIRED)
-#find_package(glfw3 REQUIRED)
+find_package(glfw3 REQUIRED)
 
 # C++ version
 add_executable(ospTutorial_mtvCpp
@@ -14,13 +14,15 @@ add_executable(ospTutorial_mtvCpp
   multivariant.cpp
   ArcballCamera.cpp
   voxelGeneration.cpp
+  imgui_impl_glfw_gl3.cpp
   )
 
 target_link_libraries(ospTutorial_mtvCpp
   PRIVATE
   ospray_sdk
   ospray_imgui
-  glut
+  #glut
+  glfw
   ${OPENGL_LIBRARIES}
 
   )
