@@ -64,7 +64,8 @@ void Multivariant_renderSample(Renderer *uniform _self,
           volumeRay,
           ldSampler,
           self->volumeSamplingRate,
-          true);
+          true,
+	  self);
 
       // Blend volume
       outColor = outColor + outTransmission * make_vec3f(volumeColor);
@@ -152,15 +153,20 @@ export void Multivariant_set(void *uniform _self,
     uniform bool shadowsEnabled,
     uniform int aoSamples,
     uniform float aoRadius,
-    uniform float volumeSamplingRate)
+    uniform float volumeSamplingRate,
+    uniform int blendMode,
+    const Data1D *uniform renderAttributes,
+    uniform int tfnType)
 {
   uniform Multivariant *uniform self = (uniform Multivariant * uniform) _self;
 
   self->shadowsEnabled = shadowsEnabled;
   self->aoSamples = aoSamples;
   self->aoRadius = aoRadius;
-
   self->volumeSamplingRate = volumeSamplingRate;
+  self->blendMode = blendMode;
+  self->renderAttributes = *renderAttributes;
+  self->tfnType = tfnType;
 }
 
 vec3f Multivariant_computeAO(const uniform Multivariant *uniform self,

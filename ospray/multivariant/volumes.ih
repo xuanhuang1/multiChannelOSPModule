@@ -19,4 +19,5 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
     Ray &ray,
     varying LDSampler *uniform ldSampler,
     const uniform float samplingRate,
-    const uniform bool shade);
+    const uniform bool shade,
+    const uniform Multivariant *uniform self);

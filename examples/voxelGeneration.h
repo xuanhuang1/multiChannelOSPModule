@@ -11,3 +11,6 @@ std::vector<float> generateVoxels_center_1ch(rkcommon::math::vec3i volumeDimensi
 
 std::vector<std::vector<float> > generateVoxels_3ch(rkcommon::math::vec3i volumeDimensions,
 						    int numPoints);
+std::vector<std::vector<float> > generateVoxels_nch(rkcommon::math::vec3i volumeDimensions,
+						    int numPoints,
+						    int n);

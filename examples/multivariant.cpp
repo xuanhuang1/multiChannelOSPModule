@@ -321,7 +321,8 @@ int main(int argc, const char **argv)
     // create and setup model and mesh
     vec3i volumeDimensions{128};
     int numPoints{10};
-    std::vector<std::vector<float> > voxels = generateVoxels_3ch(volumeDimensions, numPoints);
+    //std::vector<std::vector<float> > voxels = generateVoxels_3ch(volumeDimensions, numPoints);
+    std::vector<std::vector<float> > voxels = generateVoxels_nch(volumeDimensions, numPoints, 5);
     std::cout << voxels.size()<<" channels "
 	      << volumeDimensions.x <<"x"
 	      << volumeDimensions.y <<"x"
@@ -370,10 +371,16 @@ int main(int argc, const char **argv)
     //ospray::cpp::Renderer renderer("scivis");
     std::cout << "using multivariant renderer \n";
 
+    std::vector<int> renderAttributesData;
+    for (int i=0; i< voxels.size(); i++)
+      renderAttributesData.push_back(i);
     
     // complete setup of renderer
     renderer->setParam("aoSamples", 1);
     renderer->setParam("backgroundColor", 1.0f); // white, transparent
+    renderer->setParam("blendMode", 1); // 0:add color 1: alpha blend
+    renderer->setParam("renderAttributes", ospray::cpp::CopiedData(renderAttributesData));
+    renderer->setParam("tfnType", 0); // 0:same tfn all channel 1: pick evenly on hue
     renderer->commit();
 
     // create and setup camera

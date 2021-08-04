@@ -25,19 +25,124 @@ struct VolumeContext
   uint32 ready; // 1 if sample is ready to be used
 };
 
+
+struct vec4f addBlend(struct vec4f a, struct vec4f b)
+{
+  struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
+  ret.w = clamp(a.w + b.w, 0.f, 1.f);
+  if (ret.w == 0.f) return ret;
+  
+  ret.x = clamp((a.x*a.w + b.x*b.w)/ret.w, 0.f, 1.f);
+  ret.y = clamp((a.y*a.w + b.y*b.w)/ret.w, 0.f, 1.f);
+  ret.z = clamp((a.z*a.w + b.z*b.w)/ret.w, 0.f, 1.f);
+  return ret;
+}
+
+struct vec4f alphaBlend(struct vec4f a, struct vec4f b)
+{
+  struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
+  ret.w = clamp(a.w + b.w*(1-a.w), 0.f, 1.f);
+  if (ret.w == 0.f) return ret;
+  
+  ret.x = clamp((a.x*a.w + b.x*b.w*(1-a.w))/ret.w, 0.f, 1.f);
+  ret.y = clamp((a.y*a.w + b.y*b.w*(1-a.w))/ret.w, 0.f, 1.f);
+  ret.z = clamp((a.z*a.w + b.z*b.w*(1-a.w))/ret.w, 0.f, 1.f);
+  return ret;
+}
+
+struct vec4f blendByMode(struct vec4f a, struct vec4f b, uniform unsigned int blendMode){
+
+  struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
+  
+  if (blendMode == 0)
+     return addBlend(a, b);
+  else if (blendMode == 1)
+     return alphaBlend(a, b);
+  
+  return ret;
+  
+}
+
+
+struct vec4f blendWithSameTF(varying float* samples,
+	       	     		uniform unsigned int32 M,
+				VolumetricModel *uniform m,
+				uniform unsigned int blendMod)
+{
+	
+  struct vec4f ret = {0.f, 0.f, 0.f, 1.f};
+  
+  for (uniform i=0; i<M; i++){
+      struct vec4f tmp = m->transferFunction->get(m->transferFunction, samples[i]);
+      if (i == 0) ret = tmp;
+      else ret = blendByMode(ret, tmp, blendMod);
+  }
+  return ret;
+}
+
+
+struct vec4f blendWithDiffHue(varying float* samples,
+       	     		      uniform unsigned int32 M,
+			      VolumetricModel *uniform m,
+			      uniform unsigned int blendMode)
+{
+  // pick color evenly between RGB hue
+  struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
+				 
+  float sample = 0;
+  uniform float interval = 3.f / M;
+  for (uniform i=0; i<M; i++){
+      struct vec4f new_color = m->transferFunction->get(m->transferFunction, samples[i]);
+      struct vec4f base_color = {0.f, 0.f, 0.f, 1.f};
+      float currentHueVal = interval * i;
+      if (currentHueVal < 1.f) // color between R G
+      {
+      	 base_color.x = 1.f - currentHueVal;
+	 base_color.y = currentHueVal;
+      }else if (currentHueVal < 2.f) // color between G B
+      {
+      	 base_color.y = 2.f - currentHueVal;
+	 base_color.z = currentHueVal - 1.f;
+      }else // color between B R
+      {
+      	 base_color.z = 3.f - currentHueVal;
+      	 base_color.x = currentHueVal - 2.f;
+      }
+      base_color.w = new_color.w;
+      ret = blendByMode(ret, base_color, blendMode);
+  }    
+  return ret;
+}
+
+
+
 static void sampleVolume(MultivariantRenderContext &rc,
     VolumeContext &vc,
     VolumetricModel *uniform m,
     Ray &ray,
     const VolumeInterval &vi,
     const uniform float samplingRate,
-    const uniform bool shade)
+    const uniform bool shade,
+    const uniform Multivariant *uniform self)
 {
   // We have to iterate till we get a valid sample value
   float dt;
   float sampleVal = nan;
   const uniform float gsc = shade ? m->gradientShadingScale : 0.f;
   vec3f p; // in volume local coords
+
+  // Sample multi channel volume value in given point
+  uniform unsigned int M = self->renderAttributes.numItems;  //m->volume->vklVolume.numAttributes;
+  uniform unsigned int blendMode = self->blendMode;
+
+  // set a max of 128
+  uniform unsigned int attributeIndices[128];
+  float samples[128];
+  
+  for (uniform int i=0; i<M; i++){
+      attributeIndices[i] = get_int32(self->renderAttributes, i);
+  }
+
   while (isnan(sampleVal)) {
     // Iterate till sampling position is within interval
     float emptySpace = 0.f;
@@ -75,18 +180,14 @@ static void sampleVolume(MultivariantRenderContext &rc,
     // Prepare sampling position
     p = vc.org + newDistance * vc.dir;
 
-    // Sample volume value in given point
-    uniform unsigned int M                  =  3;  //m->volume->vklVolume.numAttributes;
-    uniform unsigned int attributeIndices[] = {0, 1, 2};
-    float samples[3];
-    
+    if (M > 1){
     vklComputeSampleMV(
         m->volume->vklSampler, (const varying vkl_vec3f *uniform) & p,
 	samples, M, attributeIndices);
-
-    sampleVal = samples[0]+samples[1]+samples[2];
-    //sampleVal = vklComputeSampleV(
-    //    m->volume->vklSampler, (const varying vkl_vec3f *uniform) & p);
+	sampleVal = samples[0];
+    }else
+	sampleVal = vklComputeSampleV(
+    	m->volume->vklSampler, (const varying vkl_vec3f *uniform) & p);
 
     // Go to the next sub-interval
     vc.iuDistance += 1.f;
@@ -95,7 +196,15 @@ static void sampleVolume(MultivariantRenderContext &rc,
   }
 
   // Apply transfer function to get color with alpha
-  vc.sample = m->transferFunction->get(m->transferFunction, sampleVal);
+  if (M == 1)
+     vc.sample = m->transferFunction->get(m->transferFunction, sampleVal);
+  else
+  {
+     if (self->tfnType == 0) 
+     	vc.sample = blendWithSameTF(samples, M, m, blendMode);
+     else //if (self->tfnType == 1)
+        vc.sample = blendWithDiffHue(samples, M, m, blendMode);
+  }
 
   // compute gradient shading lighting
   if (gsc > 0.0f) {
@@ -139,7 +248,8 @@ static float sampleAllVolumes(MultivariantRenderContext &rc,
     Ray &ray,
     const uniform float samplingRate,
     vec4f &sampledColor,
-    const uniform bool shade)
+    const uniform bool shade,
+    const uniform Multivariant *uniform self)
 {
   // Look for the closest sample across all volumes
   float minDist = inf;
@@ -154,7 +264,7 @@ static float sampleAllVolumes(MultivariantRenderContext &rc,
     if (vc.ready == 0) {
       const VolumeInterval &vi = volumeIntervals.intervals[i];
       foreach_unique (m in vi.volumetricModel) {
-        sampleVolume(rc, vc, m, ray, vi, samplingRate, shade);
+        sampleVolume(rc, vc, m, ray, vi, samplingRate, shade, self);
       }
       vc.ready = 1;
     }
@@ -182,7 +292,8 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
     Ray &ray,
     varying LDSampler *uniform ldSampler,
     const uniform float samplingRate,
-    const uniform bool shade)
+    const uniform bool shade,
+    const uniform Multivariant *uniform self)
 {
   // Array of volume contexts
   varying VolumeContext *uniform volumeContexts =
@@ -276,7 +387,9 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
           ray,
           samplingRate,
           sampledColor,
-          shade);
+          shade,
+	  self
+	  );
 
       // Exit loop if nothing sampled
       if (dist == inf)

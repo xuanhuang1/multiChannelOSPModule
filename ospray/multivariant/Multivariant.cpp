@@ -28,11 +28,17 @@ void Multivariant::commit()
 
   visibleLights = getParam<bool>("visibleLights", false);
 
+  renderAttributes = getParamDataT<int>("renderAttributes", false);
+  
   ispc::Multivariant_set(getIE(),
-      getParam<bool>("shadows", false),
-      getParam<int>("aoSamples", 0),
-      getParam<float>("aoDistance", getParam<float>("aoRadius", 1e20f)),
-      getParam<float>("volumeSamplingRate", 1.f));
+			 getParam<bool>("shadows", false),
+			 getParam<int>("aoSamples", 0),
+			 getParam<float>("aoDistance", getParam<float>("aoRadius", 1e20f)),
+			 getParam<float>("volumeSamplingRate", 1.f),
+			 getParam<int>("blendMode", 0),
+			 ispc(renderAttributes),
+			 getParam<int>("tfnType", 0)
+			 );
 }
 
 

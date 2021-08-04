@@ -16,6 +16,7 @@ struct Multivariant : public Renderer
  private:
   bool visibleLights{false};
   bool scannedVisibleLightList{true};
+  Ref<const DataT<int>> renderAttributes;
 };
 
 } // namespace ospray

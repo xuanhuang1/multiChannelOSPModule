@@ -56,7 +56,8 @@ vec3f lightAlpha(const uniform Multivariant *uniform self,
           volumeRay,
           ldSampler,
           self->volumeSamplingRate * quality,
-          false);
+          false,
+	  self);
 
       alpha = alpha * make_vec3f(volumeColor.w);
     }
