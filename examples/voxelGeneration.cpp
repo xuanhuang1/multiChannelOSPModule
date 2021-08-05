@@ -113,7 +113,7 @@ std::vector<float> generateVoxels_center_1ch(vec3i volumeDimensions,
 			      // (i.e. gravity)
 			      //value += 0.2f / (distance * distance);
 			      if (distance*distance < .2f)
-				value = 10.f;
+				value = 15.f*(1-distance*distance/0.2f);
 
 			      voxels[index] = value;
 			    }
@@ -129,9 +129,9 @@ std::vector<std::vector<float> > generateVoxels_3ch(vec3i volumeDimensions,
 {
   std::vector<std::vector<float> > voxels_list;
 
-  voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(-.5f, 0, 0)));
-  voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(0, 0, 0)));
-  voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(.5f, 0, 0)));  
+  voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(-.3f, 0, 0)));
+  voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(0, 0.5, 0)));
+  voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(.3f, 0, 0)));  
   return voxels_list;
 }
 

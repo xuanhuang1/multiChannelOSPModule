@@ -60,7 +60,7 @@ unsigned int texture;
 GLFWwindow *glfwWindow = nullptr;
 
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
-static const std::vector<std::string> blendModeStr = {"add", "alpha blend"};
+static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve"};
 
 class GLFWOSPWindow{
 public:

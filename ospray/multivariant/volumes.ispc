@@ -38,6 +38,7 @@ struct vec4f addBlend(struct vec4f a, struct vec4f b)
   return ret;
 }
 
+
 struct vec4f alphaBlend(struct vec4f a, struct vec4f b)
 {
   struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
@@ -50,15 +51,123 @@ struct vec4f alphaBlend(struct vec4f a, struct vec4f b)
   return ret;
 }
 
+
+struct vec4f porterDuff(struct vec4f c1, struct vec4f c2, float a1,  float a2)
+{
+  // will disgard .w component
+  
+  struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
+  ret.w = clamp(a1 + a2, 0.f, 1.f);	
+  if (ret.w == 0.f) return ret;
+  
+  ret.x = clamp((c1.x*a1 + c2.x*a2)/ret.w, 0.f, 1.f);
+  ret.y = clamp((c1.y*a1 + c2.y*a2)/ret.w, 0.f, 1.f);
+  ret.z = clamp((c1.z*a1 + c2.z*a2)/ret.w, 0.f, 1.f);
+  return ret;
+}
+
+struct vec4f rgb2hsl(struct vec4f c){
+       // keep w alpha component
+       // range (0, 1) to (0 ,1)
+       float H = 0.f; float S = 0.f; float L = 0.f;
+       float R = c.x; float G = c.y; float B = c.z;
+
+       float Vmax = max(max(R, G), B);
+       float Vmin = min(min(R, G), B);
+
+       L = (Vmax + Vmin)/2.f;
+       float delta = (Vmax - Vmin);
+
+       if (Vmax == Vmin) H = 0.f;
+       else if (Vmax == R) H = 60*(G-B)/(Vmax - Vmin);
+       else if (Vmax == G) H = 120 + 60*(B-R)/(Vmax - Vmin);
+       else if (Vmax == B) H = 240 + 60*(R-G)/(Vmax - Vmin);
+
+       if (H<0) H = H + 360;
+
+       if (delta == 0) S = 0.f;
+       else S = (Vmax - Vmin)/(1 - abs(2*L - 1));
+
+       struct vec4f ret = {H, S, L, c.w};
+       ret.x = clamp(ret.x, 0.f, 360.f);
+       ret.y = clamp(ret.y, 0.f, 1.f);
+       ret.z = clamp(ret.z, 0.f, 1.f);
+       return ret; 
+}
+
+struct vec4f hsl2rgb(struct vec4f c){
+       float H = c.x;	  float S = c.y; float L=c.z;
+       float R = 0;   	  float G = 0;   float B = 0;
+       
+       float C = (1 - abs(2*L - 1))*S;
+       float tmpHMod = ( (int)((H/60)*100) %200)/100.f;
+       float X = C*(1 - abs(tmpHMod-1));
+       float m = L - C/2;
+
+       if (H < 60)	{ R = C; G = X; B = 0;}
+       else if( H<120 )	{ R = X; G = C; B = 0;}
+       else if( H<180 )	{ R = 0; G = C; B = X;}
+       else if( H<240 )	{ R = 0; G = X; B = C;}
+       else if( H<300 )	{ R = X; G = 0; B = C;}
+       else 		{ R = C; G = 0; B = X;}
+
+       struct vec4f ret = {R+m, G+m, B+m, c.w};
+       ret.x = clamp(ret.x, 0.f, 1.f);
+       ret.y = clamp(ret.y, 0.f, 1.f);
+       ret.z = clamp(ret.z, 0.f, 1.f);
+       return ret;
+}
+
+struct vec4f huePreserveBlend(struct vec4f c1, struct vec4f c2){
+       struct vec4f c_new = c1;
+       struct vec4f c1_hsl = rgb2hsl(c1);
+       struct vec4f c2_hsl = rgb2hsl(c2);
+       
+       struct vec4f c_new_hsl;
+
+       // get result of normal blending
+       struct vec4f c_add_hsl = porterDuff(c1, c2, c1.w, c2.w);
+       c_add_hsl = rgb2hsl(c_add_hsl);
+
+       // assign L
+       c_new_hsl.z = min(c_add_hsl.z, 1.f);
+
+       // get weights from alpha to perform lerp on satuation
+       float a1 = c1.w / (c1.w + c2.w);
+       float a2 = c2.w / (c1.w + c2.w);
+
+       if (abs(c1_hsl.x - c2_hsl.x) < 0.001)
+       	  return porterDuff(c1, c2, c1.w, c2.w);
+       else{
+	 if (c1_hsl.y*a1 > c2_hsl.y*a2){
+	     c_new_hsl.x = c1_hsl.x;
+	     c_new_hsl.y = min(c1_hsl.y*a1 - c2_hsl.y*a2, 1.f);
+	 }else{
+	     c_new_hsl.x = c2_hsl.x;
+	     c_new_hsl.y = min(c2_hsl.y*a2 - c1_hsl.y*a1, 1.f);
+	 }
+       }
+       
+       c_new = hsl2rgb(c_new_hsl);
+       c_new.w = min(c1.w + c2.w, 1.f);
+       //c_new.x = clamp(c_new.x/c_new.w, 0.f, 1.f);
+       //c_new.y = clamp(c_new.y/c_new.w, 0.f, 1.f);
+       //c_new.z = clamp(c_new.z/c_new.w, 0.f, 1.f);
+
+       return c_new;
+}
+
+
 struct vec4f blendByMode(struct vec4f a, struct vec4f b, uniform unsigned int blendMode){
 
   struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
   
   if (blendMode == 0)
-     return addBlend(a, b);
+     ret = addBlend(a, b);
   else if (blendMode == 1)
-     return alphaBlend(a, b);
-  
+     ret = alphaBlend(a, b);
+  else if (blendMode == 2)
+     ret = huePreserveBlend(a, b);
   return ret;
   
 }
@@ -74,9 +183,11 @@ struct vec4f blendWithSameTF(varying float* samples,
   
   for (uniform i=0; i<M; i++){
       struct vec4f tmp = m->transferFunction->get(m->transferFunction, samples[i]);
+      //struct vec4f tmp = {0.f, 1.f, 1.f, 1.f};
       if (i == 0) ret = tmp;
       else ret = blendByMode(ret, tmp, blendMod);
   }
+  
   return ret;
 }
 
@@ -88,10 +199,13 @@ struct vec4f blendWithDiffHue(varying float* samples,
 {
   // pick color evenly between RGB hue
   struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
+
+  struct vec4f c_maxs1 = {0.f, 0.f, 0.f, 0.f};
+  struct vec4f c_maxs2 = {0.f, 0.f, 0.f, 0.f};
 				 
   float sample = 0;
   uniform float interval = 3.f / M;
-  for (uniform i=0; i<M; i++){
+  for (uniform int i=0; i<M; i++){
       struct vec4f new_color = m->transferFunction->get(m->transferFunction, samples[i]);
       struct vec4f base_color = {0.f, 0.f, 0.f, 1.f};
       float currentHueVal = interval * i;
@@ -109,8 +223,39 @@ struct vec4f blendWithDiffHue(varying float* samples,
       	 base_color.x = currentHueVal - 2.f;
       }
       base_color.w = new_color.w;
-      ret = blendByMode(ret, base_color, blendMode);
-  }    
+      
+      if (blendMode == 2){ 
+	struct vec4f c_hsl = base_color;
+	if (i==0) {
+	   //c_maxs2 = c_hsl;
+	   c_maxs1 = c_hsl;
+	}else if (i==1) {
+	   if (c_maxs1.w < c_hsl.w){
+	      c_maxs2 = c_maxs1;
+	      c_maxs1 = c_hsl;
+	   }else{
+	      c_maxs2 = c_hsl;
+	   }
+	}
+	else if (c_maxs2.w < c_hsl.w ){
+	   if (c_maxs1.w < c_hsl.w){
+	      c_maxs2 = c_maxs1;
+	      c_maxs1 = c_hsl;
+	   }else{
+	      c_maxs2 = c_hsl;	
+	   }
+	}
+      }else
+	ret = blendByMode(ret, base_color, blendMode);
+  }
+
+  if (blendMode == 2){
+     ret = huePreserveBlend(c_maxs1, c_maxs2);
+  }
+
+  // test color conversion
+  //ret = rgb2hsl(ret);
+  //ret = hsl2rgb(ret);
   return ret;
 }
 
