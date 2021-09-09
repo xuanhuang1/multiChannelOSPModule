@@ -26,6 +26,7 @@
 #include <alloca.h>
 #endif
 
+#include <fstream>
 //#include <vector>
 
 #include "ospray/ospray_cpp.h"
@@ -367,6 +368,39 @@ ospray::cpp::TransferFunction makeTransferFunction(const vec2f &valueRange)
   return transferFunction;
 }
 
+ospray::cpp::TransferFunction makeTransferFunctionForColor(const vec2f &valueRange,
+							   const vec3f &color)
+{
+  ospray::cpp::TransferFunction transferFunction("piecewiseLinear");
+  std::string tfColorMap{"rgb"};
+  std::string tfOpacityMap{"linear"};
+  
+  std::vector<vec3f> colors;
+  std::vector<float> opacities;
+
+
+  colors.emplace_back(0.f, 0.f, 0.f);
+  colors.emplace_back(color[0], color[1], color[2]);
+  
+
+  if (tfOpacityMap == "linear") {
+    opacities.emplace_back(0.f);
+    opacities.emplace_back(1.f);
+  } else if (tfOpacityMap == "linearInv") {
+    opacities.emplace_back(1.f);
+    opacities.emplace_back(0.f);
+  } else if (tfOpacityMap == "opaque") {
+    opacities.emplace_back(1.f);
+  }
+
+  transferFunction.setParam("color", ospray::cpp::CopiedData(colors));
+  transferFunction.setParam("opacity", ospray::cpp::CopiedData(opacities));
+  transferFunction.setParam("valueRange", valueRange);
+  transferFunction.commit();
+
+  return transferFunction;
+}
+
 
 
 
@@ -394,6 +428,10 @@ int main(int argc, const char **argv)
     return init_error;
 
   ospLoadModule("multivariant_renderer");
+  if (argc < 4) {
+      ::std::cerr << "Usage: " << argv[0] << "<filename> x y z\n";
+      return 1;
+  }
   
   // use scoped lifetimes of wrappers to release everything before ospShutdown()
   {
@@ -401,20 +439,58 @@ int main(int argc, const char **argv)
     GLFWOSPWindow glfwOspWindow;
 
     // create and setup model and mesh
-    vec3i volumeDimensions{128};
+    
+    vec3i volumeDimensions(656, 256, 200);
     int numPoints{10};
     //std::vector<std::vector<float> > voxels = generateVoxels_3ch(volumeDimensions, numPoints);
-    std::vector<std::vector<float> > voxels = generateVoxels_nch(volumeDimensions, numPoints, 5);
-    std::cout << voxels.size()<<" channels "
-	      << volumeDimensions.x <<"x"
-	      << volumeDimensions.y <<"x"
-	      << volumeDimensions.z <<" "
-	      << voxels[0].size()<< " total voxels" << std::endl;
+    //std::vector<std::vector<float> > voxels = generateVoxels_nch(volumeDimensions, numPoints, 1);
+    //std::cout << voxels.size()<<" channels "
+    //	      << volumeDimensions.x <<"x"
+    //	      << volumeDimensions.y <<"x"
+    //	      << volumeDimensions.z <<" "
+    //	      << voxels[0].size()<< " total voxels" << std::endl;
     
     std::vector<ospray::cpp::SharedData> voxel_data;
-    for (const auto &v : voxels) {
+    
+    /*for (const auto &v : voxels) {
+      voxel_data.push_back(ospray::cpp::SharedData(v.data(), volumeDimensions));
+      }*/
+    
+    std::fstream file;
+    file.open(argv[1], std::fstream::in | std::fstream::binary);
+    std::cout <<"dim "<<argv[2]<<" "<<argv[3]<<" "<<argv[4]<<"\n";
+    std::vector<std::vector<float> > voxels_read;
+    voxels_read.resize(2);
+
+    float min=math::inf, max=0;
+    for(int i=0; i<volumeDimensions.long_product();i++){
+      uint16_t buff;
+      file.read((char*)(&buff), sizeof(buff));
+      voxels_read[0].push_back(float(buff));
+      
+      voxels_read[1].push_back(float(buff));
+      if (float(buff) > max) max = float(buff);
+      if (float(buff) < min) min = float(buff);
+    }
+    file.close();
+    // output test for correctness, should be exactly the same
+    //std::ofstream ofile ("output.raw", std::ios::out | std::ios::binary);
+    //if (ofile.is_open()){
+    //  ofile.write((char*)(&voxels_read[0][0]), sizeof(voxels_read[0][0])*volumeDimensions.long_product());
+    //  ofile.close();
+    //}
+    
+    
+    for (const auto &v : voxels_read) {
       voxel_data.push_back(ospray::cpp::SharedData(v.data(), volumeDimensions));
     }
+
+    //for (const auto &v : voxels_read) {
+    //  voxel_data.push_back(ospray::cpp::CopiedData(v.data(), volumeDimensions));
+    //}
+
+    
+
     
     ospray::cpp::Volume volume("structuredRegular");
     volume.setParam("gridOrigin", vec3f(-1.f));
@@ -424,7 +500,7 @@ int main(int argc, const char **argv)
     volume.commit();
     // put the mesh into a model
     ospray::cpp::VolumetricModel model(volume);
-    model.setParam("transferFunction", makeTransferFunction(vec2f(0.f, 10.f)));
+    model.setParam("transferFunction", makeTransferFunction(vec2f(min, max)));
     model.commit();
     
     // put the model into a group (collection of models)
@@ -455,17 +531,22 @@ int main(int argc, const char **argv)
 
     // fill in attribute render array
     // render all attributes here
-    for (uint32_t i=0; i< voxels.size(); i++){
+    for (uint32_t i=0; i< voxels_read.size(); i++){
       glfwOspWindow.renderAttributesData.push_back(i);
       glfwOspWindow.renderAttributeSelection.push_back(true);
     }
+
+    std::vector<ospray::cpp::TransferFunction> tfns;
+    tfns.push_back(makeTransferFunctionForColor(vec2f(min, max), vec3f(1,0,0)));
+    tfns.push_back(makeTransferFunctionForColor(vec2f(min, max), vec3f(0,0,1)));
     
     // complete setup of renderer
     renderer->setParam("aoSamples", 1);
-    renderer->setParam("backgroundColor", 1.f); // white, transparent
+    renderer->setParam("backgroundColor", 0.f); // white, transparent
     renderer->setParam("blendMode", glfwOspWindow.blendMode); // 0:add color 1: alpha blend
     renderer->setParam("renderAttributes", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesData));
     renderer->setParam("tfnType", glfwOspWindow.tfnType); // 0:same tfn all channel 1: pick evenly on hue
+    renderer->setParam("transferFunctions", ospray::cpp::CopiedData(tfns)); // 0:same tfn all channel 1: pick evenly on hue
     renderer->commit();
 
     // create and setup camera
