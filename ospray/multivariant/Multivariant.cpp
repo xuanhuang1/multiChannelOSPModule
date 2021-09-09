@@ -29,6 +29,10 @@ void Multivariant::commit()
   visibleLights = getParam<bool>("visibleLights", false);
 
   renderAttributes = getParamDataT<int>("renderAttributes", false);
+
+  tfs = getParamDataT<TransferFunction *>("transferFunctions", false);
+  
+  tfIEs = createArrayOfIE(*tfs);
   
   ispc::Multivariant_set(getIE(),
 			 getParam<bool>("shadows", false),
@@ -37,7 +41,9 @@ void Multivariant::commit()
 			 getParam<float>("volumeSamplingRate", 1.f),
 			 getParam<int>("blendMode", 0),
 			 ispc(renderAttributes),
-			 getParam<int>("tfnType", 0)
+			 getParam<int>("numAttributes", 0),
+			 getParam<int>("tfnType", 0),
+			 tfIEs.data()
 			 );
 }
 

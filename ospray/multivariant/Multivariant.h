@@ -3,6 +3,7 @@
 
 // ospray
 #include "render/Renderer.h"
+#include "volume/transferFunction/TransferFunction.h"
 
 namespace ospray {
 
@@ -16,7 +17,9 @@ struct Multivariant : public Renderer
  private:
   bool visibleLights{false};
   bool scannedVisibleLightList{true};
-  Ref<const DataT<int>> renderAttributes;
+  Ref<const DataT<int> > renderAttributes;
+  Ref<const DataT<TransferFunction *> > tfs;
+  std::vector<void *> tfIEs;
 };
 
 } // namespace ospray

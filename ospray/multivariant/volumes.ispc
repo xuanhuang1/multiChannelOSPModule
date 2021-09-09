@@ -175,17 +175,21 @@ struct vec4f blendByMode(struct vec4f a, struct vec4f b, uniform unsigned int bl
 
 struct vec4f blendWithSameTF(varying float* samples,
 	       	     		uniform unsigned int32 M,
-				VolumetricModel *uniform m,
-				uniform unsigned int blendMod)
+			      VolumetricModel *uniform m,
+			      uniform unsigned int blendMode,
+    			      const uniform Multivariant *uniform self,
+			      uniform unsigned int *uniform attributeIndices)
 {
 	
   struct vec4f ret = {0.f, 0.f, 0.f, 1.f};
   
+      
   for (uniform i=0; i<M; i++){
-      struct vec4f tmp = m->transferFunction->get(m->transferFunction, samples[i]);
+      uniform int tfn_index = attributeIndices[i];
+      struct vec4f tmp = self->tfns[tfn_index]->get(self->tfns[tfn_index], samples[i]);
       //struct vec4f tmp = {0.f, 1.f, 1.f, 1.f};
       if (i == 0) ret = tmp;
-      else ret = blendByMode(ret, tmp, blendMod);
+      else ret = blendByMode(ret, tmp, blendMode);
   }
   
   return ret;
@@ -195,7 +199,9 @@ struct vec4f blendWithSameTF(varying float* samples,
 struct vec4f blendWithDiffHue(varying float* samples,
        	     		      uniform unsigned int32 M,
 			      VolumetricModel *uniform m,
-			      uniform unsigned int blendMode)
+			      uniform unsigned int blendMode,
+    			      const uniform Multivariant *uniform self,
+			      uniform unsigned int *uniform attributeIndices)
 {
   // pick color evenly between RGB hue
   struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
@@ -206,23 +212,8 @@ struct vec4f blendWithDiffHue(varying float* samples,
   float sample = 0;
   uniform float interval = 3.f / M;
   for (uniform int i=0; i<M; i++){
-      struct vec4f new_color = m->transferFunction->get(m->transferFunction, samples[i]);
-      struct vec4f base_color = {0.f, 0.f, 0.f, 1.f};
-      float currentHueVal = interval * i;
-      if (currentHueVal < 1.f) // color between R G
-      {
-      	 base_color.x = 1.f - currentHueVal;
-	 base_color.y = currentHueVal;
-      }else if (currentHueVal < 2.f) // color between G B
-      {
-      	 base_color.y = 2.f - currentHueVal;
-	 base_color.z = currentHueVal - 1.f;
-      }else // color between B R
-      {
-      	 base_color.z = 3.f - currentHueVal;
-      	 base_color.x = currentHueVal - 2.f;
-      }
-      base_color.w = new_color.w;
+      uniform int tfn_index = attributeIndices[i];
+      struct vec4f base_color = self->tfns[tfn_index]->get(self->tfns[tfn_index], samples[i]);
       
       if (blendMode == 2){ 
 	struct vec4f c_hsl = base_color;
@@ -325,15 +316,12 @@ static void sampleVolume(MultivariantRenderContext &rc,
     // Prepare sampling position
     p = vc.org + newDistance * vc.dir;
 
-    if (M > 1){
+
     vklComputeSampleMV(
         m->volume->vklSampler, (const varying vkl_vec3f *uniform) & p,
 	samples, M, attributeIndices);
 	sampleVal = samples[0];
-    }else
-	sampleVal = vklComputeSampleV(
-    	m->volume->vklSampler, (const varying vkl_vec3f *uniform) & p);
-
+	
     // Go to the next sub-interval
     vc.iuDistance += 1.f;
     dt = newDistance - vc.distance - emptySpace;
@@ -342,13 +330,13 @@ static void sampleVolume(MultivariantRenderContext &rc,
 
   // Apply transfer function to get color with alpha
   if (M == 1)
-     vc.sample = m->transferFunction->get(m->transferFunction, sampleVal);
+     vc.sample = self->tfns[attributeIndices[0]]->get(self->tfns[attributeIndices[0]], sampleVal);
   else
   {
      if (self->tfnType == 0) 
-     	vc.sample = blendWithSameTF(samples, M, m, blendMode);
+     	vc.sample = blendWithSameTF(samples, M, m, blendMode, self, attributeIndices);
      else //if (self->tfnType == 1)
-        vc.sample = blendWithDiffHue(samples, M, m, blendMode);
+        vc.sample = blendWithDiffHue(samples, M, m, blendMode, self, attributeIndices);
   }
 
   // compute gradient shading lighting

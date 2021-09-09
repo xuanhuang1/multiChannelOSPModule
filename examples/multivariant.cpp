@@ -78,7 +78,7 @@ public:
   ospray::cpp::FrameBuffer framebuffer;
   std::unique_ptr<ArcballCamera> arcballCamera;
 
-  int tfnType = 0;
+  int tfnType = 1;
   int blendMode = 0;
   std::vector<int> renderAttributesData;
   std::deque<bool> renderAttributeSelection;
@@ -178,7 +178,7 @@ void GLFWOSPWindow::buildUI(){
   ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
   ImGui::Begin("Another Window", nullptr, flags);
   ImGui::Text("Hello from another window!");
-  static int whichtfnType = 0;
+  static int whichtfnType = 1;
   static int whichBlendMode = 0;
   
   if (ImGui::Combo("tfn##whichtfnType",
@@ -451,7 +451,9 @@ int main(int argc, const char **argv)
     //	      << voxels[0].size()<< " total voxels" << std::endl;
     
     std::vector<ospray::cpp::SharedData> voxel_data;
-    
+    std::vector<ospray::cpp::TransferFunction> tfns;
+    std::vector<vec3f> colors = {vec3f(1,0,0), vec3f(0,1,0),vec3f(0,0,1)};
+    uint32_t n_of_ch = 3;
     /*for (const auto &v : voxels) {
       voxel_data.push_back(ospray::cpp::SharedData(v.data(), volumeDimensions));
       }*/
@@ -460,36 +462,27 @@ int main(int argc, const char **argv)
     file.open(argv[1], std::fstream::in | std::fstream::binary);
     std::cout <<"dim "<<argv[2]<<" "<<argv[3]<<" "<<argv[4]<<"\n";
     std::vector<std::vector<float> > voxels_read;
-    voxels_read.resize(2);
+    voxels_read.resize(n_of_ch);
 
-    float min=math::inf, max=0;
-    for(int i=0; i<volumeDimensions.long_product();i++){
-      uint16_t buff;
-      file.read((char*)(&buff), sizeof(buff));
-      voxels_read[0].push_back(float(buff));
+    for (uint32_t j =0; j<n_of_ch; j++){
+      float min=math::inf, max=0;
+      for(int i=0; i<volumeDimensions.long_product();i++){
+	uint16_t buff;
+	file.read((char*)(&buff), sizeof(buff));
+	voxels_read[j].push_back(float(buff));
       
-      voxels_read[1].push_back(float(buff));
-      if (float(buff) > max) max = float(buff);
-      if (float(buff) < min) min = float(buff);
+	//voxels_read[1].push_back(float(buff));
+	if (float(buff) > max) max = float(buff);
+	if (float(buff) < min) min = float(buff);
+      }
+      tfns.push_back(makeTransferFunctionForColor(vec2f(min, 1000), colors[j]));
+
     }
     file.close();
-    // output test for correctness, should be exactly the same
-    //std::ofstream ofile ("output.raw", std::ios::out | std::ios::binary);
-    //if (ofile.is_open()){
-    //  ofile.write((char*)(&voxels_read[0][0]), sizeof(voxels_read[0][0])*volumeDimensions.long_product());
-    //  ofile.close();
-    //}
-    
     
     for (const auto &v : voxels_read) {
       voxel_data.push_back(ospray::cpp::SharedData(v.data(), volumeDimensions));
     }
-
-    //for (const auto &v : voxels_read) {
-    //  voxel_data.push_back(ospray::cpp::CopiedData(v.data(), volumeDimensions));
-    //}
-
-    
 
     
     ospray::cpp::Volume volume("structuredRegular");
@@ -500,7 +493,7 @@ int main(int argc, const char **argv)
     volume.commit();
     // put the mesh into a model
     ospray::cpp::VolumetricModel model(volume);
-    model.setParam("transferFunction", makeTransferFunction(vec2f(min, max)));
+    model.setParam("transferFunction", tfns[0]);
     model.commit();
     
     // put the model into a group (collection of models)
@@ -536,17 +529,15 @@ int main(int argc, const char **argv)
       glfwOspWindow.renderAttributeSelection.push_back(true);
     }
 
-    std::vector<ospray::cpp::TransferFunction> tfns;
-    tfns.push_back(makeTransferFunctionForColor(vec2f(min, max), vec3f(1,0,0)));
-    tfns.push_back(makeTransferFunctionForColor(vec2f(min, max), vec3f(0,0,1)));
-    
+
     // complete setup of renderer
     renderer->setParam("aoSamples", 1);
     renderer->setParam("backgroundColor", 0.f); // white, transparent
     renderer->setParam("blendMode", glfwOspWindow.blendMode); // 0:add color 1: alpha blend
     renderer->setParam("renderAttributes", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesData));
+    renderer->setParam("numAttributes", voxels_read.size());
     renderer->setParam("tfnType", glfwOspWindow.tfnType); // 0:same tfn all channel 1: pick evenly on hue
-    renderer->setParam("transferFunctions", ospray::cpp::CopiedData(tfns)); // 0:same tfn all channel 1: pick evenly on hue
+    renderer->setParam("transferFunctions", ospray::cpp::CopiedData(tfns)); 
     renderer->commit();
 
     // create and setup camera

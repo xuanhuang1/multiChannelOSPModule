@@ -6,6 +6,7 @@
 #include "common/World.ih"
 #include "math/random.ih"
 #include "render/Renderer.ih"
+#include "volume/transferFunction/TransferFunction.ih"
 
 struct Multivariant
 {
@@ -16,7 +17,9 @@ struct Multivariant
   float volumeSamplingRate;
   int blendMode;
   Data1D renderAttributes;
+  int numAttributes;
   int tfnType;
+  TransferFunction** tfns;
 };
 
 struct MultivariantRenderContext

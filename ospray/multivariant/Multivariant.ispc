@@ -156,7 +156,9 @@ export void Multivariant_set(void *uniform _self,
     uniform float volumeSamplingRate,
     uniform int blendMode,
     const Data1D *uniform renderAttributes,
-    uniform int tfnType)
+    uniform int numAttributes,
+    uniform int tfnType,
+    void *uniform tfns)
 {
   uniform Multivariant *uniform self = (uniform Multivariant * uniform) _self;
 
@@ -166,7 +168,9 @@ export void Multivariant_set(void *uniform _self,
   self->volumeSamplingRate = volumeSamplingRate;
   self->blendMode = blendMode;
   self->renderAttributes = *renderAttributes;
+  self->numAttributes = numAttributes;
   self->tfnType = tfnType;
+  self->tfns = (TransferFunction * *uniform) tfns;
 }
 
 vec3f Multivariant_computeAO(const uniform Multivariant *uniform self,
