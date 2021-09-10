@@ -15,6 +15,7 @@ add_executable(ospTutorial_mtvCpp
   ArcballCamera.cpp
   voxelGeneration.cpp
   imgui_impl_glfw_gl3.cpp
+  TransferFunctionWidget.cpp
   )
 
 target_link_libraries(ospTutorial_mtvCpp
