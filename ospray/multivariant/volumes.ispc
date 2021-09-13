@@ -157,6 +157,11 @@ struct vec4f huePreserveBlend(struct vec4f c1, struct vec4f c2){
        return c_new;
 }
 
+struct vec4f highestDominateBlend(struct vec4f c1, struct vec4f c2){
+       if (c1.w > c2.w) return c1;
+       else return c2;
+}
+
 
 struct vec4f blendByMode(struct vec4f a, struct vec4f b, uniform unsigned int blendMode){
 
@@ -168,6 +173,8 @@ struct vec4f blendByMode(struct vec4f a, struct vec4f b, uniform unsigned int bl
      ret = alphaBlend(a, b);
   else if (blendMode == 2)
      ret = huePreserveBlend(a, b);
+  else if (blendMode == 3)
+     ret = highestDominateBlend(a, b);
   return ret;
   
 }
@@ -195,6 +202,33 @@ struct vec4f blendWithSameTF(varying float* samples,
   return ret;
 }
 
+static void quick_sort (varying unsigned int32 *varying a , varying  unsigned int32 n,  varying unsigned int32* varying order)
+{
+  uint p, t;
+  uint i, j;
+
+  if (n < 2) return;
+
+  p = order[n/2];
+
+  for (i = 0, j = n - 1;; i++, j--)
+  {
+    while (order[i] < p) i++;
+    while (p < order[j]) j--;
+    if (i >= j) break;
+
+    t = a[i];
+    a[i] = a[j];
+    a[j] = t;
+
+    t = order[i];
+    order[i] = order[j];
+    order[j] = t;
+  }
+
+  quick_sort (a, i, order);
+  quick_sort (a+i, n-i, order+i);
+}
 
 struct vec4f blendWithDiffHue(varying float* samples,
        	     		      uniform unsigned int32 M,
@@ -210,10 +244,34 @@ struct vec4f blendWithDiffHue(varying float* samples,
   struct vec4f c_maxs2 = {0.f, 0.f, 0.f, 0.f};
 				 
   float sample = 0;
-  uniform float interval = 3.f / M;
+
+  // if doing alphaBlend
+  // shuffle  channel ordering within a voxel
+  unsigned int order[128];
+  unsigned int attributeIndicesRand[128];
+  struct vec4f base_colors[128];
+  
+  RNGState state;
+  seed_rng(&state, programIndex);
+  
   for (uniform int i=0; i<M; i++){
-      uniform int tfn_index = attributeIndices[i];
-      struct vec4f base_color = self->tfns[tfn_index]->get(self->tfns[tfn_index], samples[i]);
+      uniform uint tfn_index = attributeIndices[i];
+      order[i] = random(&state)%3;
+      attributeIndicesRand[i] = attributeIndices[(i)%M];
+      base_colors[i] = self->tfns[tfn_index]->get(self->tfns[tfn_index], samples[i]);
+  }
+ 
+  //quick_sort(attributeIndicesRand, M, order);
+
+  //if (attributeIndicesRand[0] == attributeIndices[0]) ret.x = 1.f;
+  //if (attributeIndicesRand[0] == attributeIndices[1]) ret.y = 1.f;
+  //if (attributeIndicesRand[0] == attributeIndices[2]) ret.z = 1.f;
+  //ret.w = 1.f;
+  //return ret;
+  
+
+  for (uniform int i=0; i<M; i++){
+      struct vec4f base_color = base_colors[attributeIndicesRand[i]];
       
       if (blendMode == 2){ 
 	struct vec4f c_hsl = base_color;
@@ -529,8 +587,19 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
         break;
 
       // Blend sampled color
+
       color = color
           + transmission * (1.f - sampledColor.w) * make_vec3f(sampledColor);
+	  
+      //struct vec4f a  = {color.x, color.y, color.z, w};
+      //struct vec4f b = sampledColor;
+      //b.w = transmission * (1- sampledColor.w);
+      //struct vec4f retCol = huePreserveBlend(a, b);
+      //struct vec4f retCol = huePreserveBlend(a, b);
+      //color.x = retCol.x;
+      //color.y = retCol.y;
+      //color.z = retCol.z;
+      
       transmission *= sampledColor.w;
 
       // Stop if we reached min contribution

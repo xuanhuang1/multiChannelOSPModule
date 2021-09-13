@@ -62,7 +62,7 @@ unsigned int texture;
 GLFWwindow *glfwWindow = nullptr;
 
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
-static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve"};
+static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate"};
 
 class GLFWOSPWindow{
 public:
@@ -244,8 +244,7 @@ void GLFWOSPWindow::buildUI(){
 		tmpColors.push_back(colors[0]*alphaOpacities[i].x);
 		tmpOpacities.push_back(alphaOpacities[i].y);
 	      }
-	      tfn_widget.setUnchanged();;
-    
+	      tfn_widget.setUnchanged();
     
 	      tfns[0].setParam("color", ospray::cpp::CopiedData(tmpColors));
 	      tfns[0].setParam("opacity", ospray::cpp::CopiedData(tmpOpacities));
@@ -491,10 +490,11 @@ int main(int argc, const char **argv)
 
     // create and setup model and mesh
     
-    vec3i volumeDimensions(656, 256, 200);
+    //vec3i volumeDimensions(656, 256, 200);
+    vec3i volumeDimensions(200, 200, 200);
     int numPoints{10};
-    //std::vector<std::vector<float> > voxels = generateVoxels_3ch(volumeDimensions, numPoints);
-    //std::vector<std::vector<float> > voxels = generateVoxels_nch(volumeDimensions, numPoints, 1);
+    std::vector<std::vector<float> > voxels = generateVoxels_3ch(volumeDimensions, numPoints);
+    //std::vector<std::vector<float> > voxels = generateVoxels_nch(volumeDimensions, numPoints, 3);
     //std::cout << voxels.size()<<" channels "
     //	      << volumeDimensions.x <<"x"
     //	      << volumeDimensions.y <<"x"
@@ -518,14 +518,18 @@ int main(int argc, const char **argv)
       float min=math::inf, max=0;
       for(int i=0; i<volumeDimensions.long_product();i++){
 	uint16_t buff;
-	file.read((char*)(&buff), sizeof(buff));
-	voxels_read[j].push_back(float(buff));
+	//file.read((char*)(&buff), sizeof(buff));
+	//voxels_read[j].push_back(float(buff));
+	//if (float(buff) > max) max = float(buff);
+	//if (float(buff) < min) min = float(buff);
       
-	//voxels_read[1].push_back(float(buff));
-	if (float(buff) > max) max = float(buff);
-	if (float(buff) < min) min = float(buff);
+	voxels_read[j].push_back(voxels[j][i]);
+	if (voxels[j][i] > max) max = voxels[j][i];
+	if (voxels[j][i] < min) min = voxels[j][i];
+	//std::cout << voxels[j][i];
+	
       }
-      glfwOspWindow.tfns.push_back(makeTransferFunctionForColor(vec2f(min, 1500), glfwOspWindow.colors[j]));
+      glfwOspWindow.tfns.push_back(makeTransferFunctionForColor(vec2f(min, max), glfwOspWindow.colors[j]));
 
     }
     file.close();
