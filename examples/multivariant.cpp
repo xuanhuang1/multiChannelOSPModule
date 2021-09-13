@@ -50,6 +50,8 @@
 #include "imgui.h"
 #include "imgui_impl_glfw_gl3.h"
 
+//#define DEMO_VOL 
+
 using namespace rkcommon;
 using namespace rkcommon::math;
 
@@ -63,6 +65,7 @@ GLFWwindow *glfwWindow = nullptr;
 
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
 static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate"};
+static const std::vector<std::string> frontBackStr = {"alpha blend", "hue preserve", "highest value dominate"};
 
 class GLFWOSPWindow{
 public:
@@ -81,12 +84,13 @@ public:
 
   int tfnType = 1;
   int blendMode = 0;
+  int frontBackBlendMode = 0;
   std::vector<int> renderAttributesData;
   std::deque<bool> renderAttributeSelection;
   std::vector<ospray::cpp::TransferFunction> tfns;
   std::vector<vec3f> colors;
   std::vector<float> colorIntensities;
-  tfnw::TransferFunctionWidget tfn_widget;
+  std::vector<tfnw::TransferFunctionWidget> tfn_widgets;
   
   GLFWOSPWindow(){
     activeWindow = this;
@@ -178,6 +182,12 @@ bool blendModeUI_callback(void *, int index, const char **out_text)
   return true;
 }
 
+bool frontBackBlendModeUI_callback(void *, int index, const char **out_text)
+{
+  *out_text = frontBackStr[index].c_str();
+  return true;
+}
+
 
 void GLFWOSPWindow::buildUI(){
   ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
@@ -185,6 +195,7 @@ void GLFWOSPWindow::buildUI(){
   ImGui::Text("Hello from another window!");
   static int whichtfnType = 1;
   static int whichBlendMode = 0;
+  static int whichFrontBackBlendMode = 0;
   
   if (ImGui::Combo("tfn##whichtfnType",
 		   &whichtfnType,
@@ -205,6 +216,16 @@ void GLFWOSPWindow::buildUI(){
      renderer.setParam("blendMode", blendMode); 
      renderer.commit();
   }
+
+    if (ImGui::Combo("frontBackBlendMode##whichFrontBackBlendMode",
+		   &whichFrontBackBlendMode,
+		   frontBackBlendModeUI_callback,
+		   nullptr,
+		   frontBackStr.size())) {
+     frontBackBlendMode = whichFrontBackBlendMode;
+     renderer.setParam("frontBackBlendMode", frontBackBlendMode); 
+     renderer.commit();
+  }
   
   if (ImGui::TreeNode("Selection State: Multiple Selection"))
     {
@@ -218,16 +239,19 @@ void GLFWOSPWindow::buildUI(){
 
 	  //intensity
 	  if(ImGui::SliderFloat(("intensity "+std::to_string(n)).c_str(),
-				&colorIntensities[n], 0.001f, 10.f)){
+				&colorIntensities[n], 0.001f, 3.f)){
 	    std::vector<vec3f> tmpColors;
 	    std::vector<float> tmpOpacities;
-	    tmpColors.emplace_back(vec3f(0,0,0));
-	    tmpOpacities.emplace_back(0.0f);
 	    vec3f middleColor = colors[n];
-	    
-	    tmpColors.emplace_back(middleColor);
-	    tmpOpacities.emplace_back(colorIntensities[n]);
-	      
+
+	    {
+	      auto alphaOpacities = tfn_widgets[n].get_alpha_control_pts();
+	      for (int i=0;i<alphaOpacities.size();i++){
+		tmpColors.push_back(colors[n]*alphaOpacities[i].x);
+		tmpOpacities.push_back((alphaOpacities[i].y) * colorIntensities[n]);
+	      }
+	      tfn_widgets[n].setUnchanged();
+	    }
 	    tfns[n].setParam("color", ospray::cpp::CopiedData(tmpColors));
 	    tfns[n].setParam("opacity", ospray::cpp::CopiedData(tmpOpacities));
 	    tfns[n].commit();
@@ -235,27 +259,28 @@ void GLFWOSPWindow::buildUI(){
 	    tfnsChanged = true;
 	  }
 
-	  if (n == 0){
-	    if (tfn_widget.changed()) {
-	      std::vector<vec3f> tmpColors;
-	      std::vector<float> tmpOpacities;
-	      auto alphaOpacities = tfn_widget.get_alpha_control_pts();
-	      for (int i=0;i<alphaOpacities.size();i++){
-		tmpColors.push_back(colors[0]*alphaOpacities[i].x);
-		tmpOpacities.push_back(alphaOpacities[i].y);
-	      }
-	      tfn_widget.setUnchanged();
-    
-	      tfns[0].setParam("color", ospray::cpp::CopiedData(tmpColors));
-	      tfns[0].setParam("opacity", ospray::cpp::CopiedData(tmpOpacities));
-	      tfns[0].commit();
+	  
+	  if (tfn_widgets[n].changed()) {
+	    std::vector<vec3f> tmpColors;
+	    std::vector<float> tmpOpacities;
+	    auto alphaOpacities = tfn_widgets[n].get_alpha_control_pts();
+	    for (int i=0;i<alphaOpacities.size();i++){
+	      tmpColors.push_back(colors[n]*alphaOpacities[i].x);
+	      tmpOpacities.push_back((alphaOpacities[i].y) * colorIntensities[n]);
 
-	      tfnsChanged = true;
 	    }
+	    tfn_widgets[n].setUnchanged();
+    
+	    tfns[n].setParam("color", ospray::cpp::CopiedData(tmpColors));
+	    tfns[n].setParam("opacity", ospray::cpp::CopiedData(tmpOpacities));
+	    tfns[n].commit();
+
+	    tfnsChanged = true;
+	  }
 
   
-	    tfn_widget.draw_ui();
-	  }
+	  tfn_widgets[n].draw_ui();
+	  
 	}
       if (renderAttributeChanged){
 	// rebuild attribute list to render
@@ -489,11 +514,14 @@ int main(int argc, const char **argv)
     GLFWOSPWindow glfwOspWindow;
 
     // create and setup model and mesh
-    
-    //vec3i volumeDimensions(656, 256, 200);
-    vec3i volumeDimensions(200, 200, 200);
     int numPoints{10};
+
+#ifndef DEMO_VOL
+    vec3i volumeDimensions(656, 256, 200);
+#else
+    vec3i volumeDimensions(200, 200, 200);
     std::vector<std::vector<float> > voxels = generateVoxels_3ch(volumeDimensions, numPoints);
+#endif
     //std::vector<std::vector<float> > voxels = generateVoxels_nch(volumeDimensions, numPoints, 3);
     //std::cout << voxels.size()<<" channels "
     //	      << volumeDimensions.x <<"x"
@@ -517,17 +545,20 @@ int main(int argc, const char **argv)
     for (uint32_t j =0; j<n_of_ch; j++){
       float min=math::inf, max=0;
       for(int i=0; i<volumeDimensions.long_product();i++){
+
+#ifndef DEMO_VOL
 	uint16_t buff;
-	//file.read((char*)(&buff), sizeof(buff));
-	//voxels_read[j].push_back(float(buff));
-	//if (float(buff) > max) max = float(buff);
-	//if (float(buff) < min) min = float(buff);
-      
+	file.read((char*)(&buff), sizeof(buff));
+	voxels_read[j].push_back(float(buff));
+	if (float(buff) > max) max = float(buff);
+	if (float(buff) < min) min = float(buff);
+	max = 1500;
+#else
 	voxels_read[j].push_back(voxels[j][i]);
 	if (voxels[j][i] > max) max = voxels[j][i];
 	if (voxels[j][i] < min) min = voxels[j][i];
 	//std::cout << voxels[j][i];
-	
+#endif
       }
       glfwOspWindow.tfns.push_back(makeTransferFunctionForColor(vec2f(min, max), glfwOspWindow.colors[j]));
 
@@ -582,6 +613,9 @@ int main(int argc, const char **argv)
       glfwOspWindow.renderAttributesData.push_back(i);
       glfwOspWindow.renderAttributeSelection.push_back(true);
       glfwOspWindow.colorIntensities.push_back(1);
+      tfnw::TransferFunctionWidget tmp;
+      tmp.setGuiText("colormap " +std::to_string(i));
+      glfwOspWindow.tfn_widgets.push_back(tmp);
     }
 
 

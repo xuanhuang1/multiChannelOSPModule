@@ -51,6 +51,7 @@ class TransferFunctionWidget {
     bool gpu_image_stale = true;
     bool colormap_changed = true;
     GLuint colormap_img = -1;
+  std::string guiText = "color map";
 
 public:
     TransferFunctionWidget();
@@ -79,6 +80,8 @@ public:
     void get_colormapf(std::vector<float> &color, std::vector<float> &opacity);
 
   std::vector<vec2f> get_alpha_control_pts(){ return alpha_control_pts;}
+
+  void setGuiText(std::string in) { guiText = in;}
 private:
     void update_gpu_image();
 

@@ -84,7 +84,7 @@ TransferFunctionWidget::vec2f::operator ImVec2() const
 TransferFunctionWidget::TransferFunctionWidget()
 {
     // Load up the embedded colormaps as the default options
-    load_embedded_preset(paraview_cool_warm, sizeof(paraview_cool_warm), "red");
+    load_embedded_preset(paraview_cool_warm, sizeof(paraview_cool_warm), "color");
 
     // Initialize the colormap alpha channel w/ a linear ramp
     update_colormap();
@@ -117,7 +117,7 @@ void TransferFunctionWidget::draw_ui()
         "Left click to add a point, right click remove. "
         "Left click + drag to move points.");
 
-    if (ImGui::BeginCombo("Colormap", colormaps[selected_colormap].name.c_str())) {
+    if (ImGui::BeginCombo(guiText.c_str(), colormaps[selected_colormap].name.c_str())) {
         for (size_t i = 0; i < colormaps.size(); ++i) {
             if (ImGui::Selectable(colormaps[i].name.c_str(), selected_colormap == i)) {
                 selected_colormap = i;
@@ -147,7 +147,7 @@ void TransferFunctionWidget::draw_ui()
 
     ImGui::InvisibleButton("tfn_canvas", canvas_size);
 
-    static bool clicked_on_item = false;
+    bool clicked_on_item = false;
     if (!io.MouseDown[0] && !io.MouseDown[1]) {
         clicked_on_item = false;
     }

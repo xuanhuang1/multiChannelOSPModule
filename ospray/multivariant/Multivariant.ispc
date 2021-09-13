@@ -155,6 +155,7 @@ export void Multivariant_set(void *uniform _self,
     uniform float aoRadius,
     uniform float volumeSamplingRate,
     uniform int blendMode,
+    uniform int frontBackBlendMode,
     const Data1D *uniform renderAttributes,
     uniform int numAttributes,
     uniform int tfnType,
@@ -167,6 +168,7 @@ export void Multivariant_set(void *uniform _self,
   self->aoRadius = aoRadius;
   self->volumeSamplingRate = volumeSamplingRate;
   self->blendMode = blendMode;
+  self->frontBackBlendMode = frontBackBlendMode;
   self->renderAttributes = *renderAttributes;
   self->numAttributes = numAttributes;
   self->tfnType = tfnType;

@@ -16,6 +16,7 @@ struct Multivariant
   float aoRadius;
   float volumeSamplingRate;
   int blendMode;
+  int frontBackBlendMode;
   Data1D renderAttributes;
   int numAttributes;
   int tfnType;

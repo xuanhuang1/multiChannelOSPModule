@@ -268,10 +268,12 @@ struct vec4f blendWithDiffHue(varying float* samples,
   //if (attributeIndicesRand[0] == attributeIndices[2]) ret.z = 1.f;
   //ret.w = 1.f;
   //return ret;
-  
+  //if (order[0] == 0) ret.x = 1.f;
+  //ret.w = 1.f;
+  //return ret;
 
   for (uniform int i=0; i<M; i++){
-      struct vec4f base_color = base_colors[attributeIndicesRand[i]];
+      struct vec4f base_color = base_colors[i];
       
       if (blendMode == 2){ 
 	struct vec4f c_hsl = base_color;
@@ -378,7 +380,7 @@ static void sampleVolume(MultivariantRenderContext &rc,
     vklComputeSampleMV(
         m->volume->vklSampler, (const varying vkl_vec3f *uniform) & p,
 	samples, M, attributeIndices);
-	sampleVal = samples[0];
+    sampleVal = samples[0];
 	
     // Go to the next sub-interval
     vc.iuDistance += 1.f;
@@ -587,20 +589,47 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
         break;
 
       // Blend sampled color
+      if (self->frontBackBlendMode == 0){
+      	   color = color
+            + transmission * (1.f - sampledColor.w) * make_vec3f(sampledColor); 
+      	   //transmission *= sampledColor.w;
+	   
+	   // to alpha
+      	   float a_w = 1 - luminance(make_vec3f(transmission));
+      	   float b_w = 1 - luminance(make_vec3f(sampledColor.w));
+      	   struct vec4f a  = {color.x, color.y, color.z, a_w};
+      	   struct vec4f b = {sampledColor.x, sampledColor.y, sampledColor.z, b_w};
+      	   struct vec4f retCol = alphaBlend(a, b);
+	   //b_w = (1-a_w)*b_w;
+      	   //struct vec4f retCol = huePreserveBlend(a, b);
 
-      color = color
-          + transmission * (1.f - sampledColor.w) * make_vec3f(sampledColor);
-	  
-      //struct vec4f a  = {color.x, color.y, color.z, w};
-      //struct vec4f b = sampledColor;
-      //b.w = transmission * (1- sampledColor.w);
-      //struct vec4f retCol = huePreserveBlend(a, b);
-      //struct vec4f retCol = huePreserveBlend(a, b);
-      //color.x = retCol.x;
-      //color.y = retCol.y;
-      //color.z = retCol.z;
-      
-      transmission *= sampledColor.w;
+      	   // set back to transmission
+      	   //color = make_vec3f(retCol);
+	   
+      	   transmission *= sampledColor.w;
+      }else if (self->frontBackBlendMode == 1){
+      	   // to alpha
+      	   float a_w = 1 - luminance(make_vec3f(transmission));
+      	   float b_w = 1 - luminance(make_vec3f(sampledColor.w));
+      	   struct vec4f a  = {color.x, color.y, color.z, a_w};
+      	   struct vec4f b = {sampledColor.x, sampledColor.y, sampledColor.z, b_w};
+      	   //struct vec4f retCol = alphaBlend(a, b);
+	   //b_w = (1-a_w)*b_w;
+      	   struct vec4f retCol = huePreserveBlend(a, b);
+
+      	   // set back to transmission
+      	   color = make_vec3f(retCol);
+	   
+      	   transmission *= sampledColor.w;
+      }else if (self->frontBackBlendMode == 2){
+      	   float a_w = 1 - luminance(make_vec3f(transmission));
+      	   float b_w = 1 - luminance(make_vec3f(sampledColor.w));
+	   if (b_w > a_w) {
+	      color = make_vec3f(sampledColor);
+      	      transmission = sampledColor.w;
+	   }
+      }
+
 
       // Stop if we reached min contribution
       if (transmission < rc.renderer->super.minContribution)
