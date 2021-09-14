@@ -595,11 +595,11 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
       	   //transmission *= sampledColor.w;
 	   
 	   // to alpha
-      	   float a_w = 1 - luminance(make_vec3f(transmission));
-      	   float b_w = 1 - luminance(make_vec3f(sampledColor.w));
-      	   struct vec4f a  = {color.x, color.y, color.z, a_w};
-      	   struct vec4f b = {sampledColor.x, sampledColor.y, sampledColor.z, b_w};
-      	   struct vec4f retCol = alphaBlend(a, b);
+      	   //float a_w = 1 - luminance(make_vec3f(transmission));
+      	   //float b_w = 1 - luminance(make_vec3f(sampledColor.w));
+      	   //struct vec4f a  = {color.x, color.y, color.z, a_w};
+      	   //struct vec4f b = {sampledColor.x, sampledColor.y, sampledColor.z, b_w};
+      	   //struct vec4f retCol = alphaBlend(a, b);
 	   //b_w = (1-a_w)*b_w;
       	   //struct vec4f retCol = huePreserveBlend(a, b);
 

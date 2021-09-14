@@ -115,7 +115,7 @@ std::vector<float> generateVoxels_center_1ch(vec3i volumeDimensions,
 			      //value += 0.2f / (distance * distance);
 			      float r_sq = .5f;
 			      if (distance*distance < r_sq)
-				value = 10.f*(1-distance*distance/r_sq)*weight;
+				value = 1.f*(1-distance*distance/r_sq)*weight;
 			      
 			      voxels[index] = value;
 			    }
