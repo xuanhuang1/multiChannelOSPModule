@@ -50,7 +50,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw_gl3.h"
 
-//#define DEMO_VOL 
+#define DEMO_VOL 
 
 using namespace rkcommon;
 using namespace rkcommon::math;
@@ -616,7 +616,7 @@ int main(int argc, const char **argv)
 
     // complete setup of renderer
     renderer->setParam("aoSamples", 1);
-    renderer->setParam("backgroundColor", {0.f, 0.f, 0.f, 1.f}); // white, transparent
+    renderer->setParam("backgroundColor", 0.f); // white, transparent
     renderer->setParam("blendMode", glfwOspWindow.blendMode); // 0:add color 1: alpha blend
     renderer->setParam("renderAttributes", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesData));
     renderer->setParam("numAttributes", voxels_read.size());

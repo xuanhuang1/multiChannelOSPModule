@@ -25,7 +25,7 @@ export void MultivariantMaterial_set(void *uniform _mat,
 {
   MultivariantMaterial *uniform mat = (MultivariantMaterial * uniform) _mat;
 
-  mat->super.type = RENDERER_TYPE_SCIVIS;
+  /*mat->super.type = RENDERER_TYPE_SCIVIS;*/
 
   mat->d = d;
   mat->dMap = dMap;

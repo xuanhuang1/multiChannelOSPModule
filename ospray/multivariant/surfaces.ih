@@ -48,7 +48,7 @@ inline MultivariantBSDF evalMaterial(const DifferentialGeometry &dg)
   res.transmission = make_vec3f(1.f - dg.color.w);
 
   foreach_unique (m in mat) {
-    if (m != NULL && m->super.type == RENDERER_TYPE_SCIVIS) {
+    if (m != NULL /*&& m->super.material.type == MATERIAL_TYPE_OBJ*/) {
       float d = m->d * get1f(m->dMap, dg, 1.f) * dg.color.w;
 
       res.diffuse = res.diffuse * m->Kd;

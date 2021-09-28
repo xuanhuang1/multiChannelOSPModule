@@ -415,7 +415,7 @@ static void sampleVolume(MultivariantRenderContext &rc,
       dg.material = NULL;
       dg.epsilon = dt / 2.f;
       // transform to world coords
-      dg.Ns = dg.Ng = normalize(xfmVector(transposed(vi.xfm.l), ns));
+      dg.Ns = dg.Ng = normalize(xfmVector(transposed(vi.instance->xfm.l), ns));
       dg.P = ray.org + vc.distance * ray.dir;
       SSI shading = computeShading(rc.renderer,
           rc.fb,
@@ -507,7 +507,7 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
     // Transform ray into the volume local space
     const VolumeInterval &vi = volumeIntervals.intervals[i];
     Ray transformedRay = ray;
-    transformRay(transformedRay, vi.rcp_xfm);
+    transformRay(transformedRay, vi.instance->rcp_xfm);
 
     // Set volume context initial values
     VolumeContext &vc = volumeContexts[i];
@@ -559,14 +559,24 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
       // There might be different volumetric models used across vector lanes
       // so we must iterate over them
       VolumetricModel *varying model = vi.volumetricModel;
+      float time = 0.5f;
       foreach_unique (m in model) {
         // Create volume interval interator
-        vc.intervalIterator = vklInitIntervalIteratorV(m->volume->vklSampler,
+        /*vc.intervalIterator = vklInitIntervalIteratorV(m->volume->vklSampler,
             (varying vkl_vec3f *)&vc.org,
             (varying vkl_vec3f *)&vc.dir,
             (varying vkl_range1f *)&rInterval,
             m->vklValueSelector,
-            vc.intervalIteratorBuffer);
+            vc.intervalIteratorBuffer);*/
+
+	    // Create volume interval interator
+            vc.intervalIterator = vklInitIntervalIteratorV(m->vklIntervalContext,
+            			(varying vkl_vec3f *)&vc.org,
+            			(varying vkl_vec3f *)&vc.dir,
+            			(varying vkl_range1f *)&rInterval,
+            			&time,
+            			vc.intervalIteratorBuffer);
+      
       }
     }
 
