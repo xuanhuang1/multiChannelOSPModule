@@ -50,16 +50,18 @@
 #include "imgui.h"
 #include "imgui_impl_glfw_gl3.h"
 
-#define DEMO_VOL 
+//#define DEMO_VOL 
 
 using namespace rkcommon;
 using namespace rkcommon::math;
-
 
 // image size
 vec2i imgSize{1024, 768};
 vec2i windowSize{1024,768};
 unsigned int texture;
+unsigned int guiTextures[128];
+unsigned int guiTextureSize = 0;
+
 
 GLFWwindow *glfwWindow = nullptr;
 
@@ -376,6 +378,26 @@ void GLFWOSPWindow::reshape(int w, int h)
 
 }
 
+#define checkImageWidth 64
+#define checkImageHeight 64
+static GLubyte checkImage[checkImageHeight][checkImageWidth][4];
+
+void makeCheckImage(void)
+{
+   int i, j, c;
+    
+   for (i = 0; i < checkImageHeight; i++) {
+      for (j = 0; j < checkImageWidth; j++) {
+         c = ((((i&0x8)==0)^((j&0x8))==0))*255;
+         checkImage[i][j][0] = (GLubyte) c;
+         checkImage[i][j][1] = (GLubyte) c;
+         checkImage[i][j][2] = (GLubyte) c;
+         checkImage[i][j][3] = (GLubyte) 255;
+      }
+   }
+}
+
+
 void init (void* fb){
     glEnable(GL_TEXTURE_2D);
     glDisable(GL_LIGHTING);
@@ -396,6 +418,23 @@ void init (void* fb){
 		 GL_RGBA,
 		 GL_FLOAT,
 		 fb);
+
+    makeCheckImage();
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    glGenTextures(1, &guiTextures[guiTextureSize]);
+    glBindTexture(GL_TEXTURE_2D, guiTextures[guiTextureSize]);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, 
+		    GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 
+		    GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, checkImageWidth, 
+		 checkImageHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
+		 checkImage);
+    guiTextureSize++;
 
 }
 
@@ -498,8 +537,8 @@ int main(int argc, const char **argv)
     return init_error;
 
   ospLoadModule("multivariant_renderer");
-  if (argc < 4) {
-      ::std::cerr << "Usage: " << argv[0] << "<filename> x y z\n";
+  if (argc < 5) {
+      ::std::cerr << "Usage: " << argv[0] << "<filename> x y z n_of_channels\n";
       return 1;
   }
   
@@ -509,13 +548,15 @@ int main(int argc, const char **argv)
     GLFWOSPWindow glfwOspWindow;
 
     // create and setup model and mesh
-    int numPoints{10};
+    uint32_t n_of_ch = 1;
 
 #ifndef DEMO_VOL
-    vec3i volumeDimensions(656, 256, 200);
+    vec3i volumeDimensions(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]));
+    n_of_ch = std::stoi(argv[5]);
 #else
     vec3i volumeDimensions(200, 200, 200);
     std::vector<std::vector<float> > voxels = generateVoxels_3ch(volumeDimensions, numPoints);
+    uint32_t n_of_ch = 3;
 #endif
     //std::vector<std::vector<float> > voxels = generateVoxels_nch(volumeDimensions, numPoints, 3);
     //std::cout << voxels.size()<<" channels "
@@ -525,11 +566,20 @@ int main(int argc, const char **argv)
     //	      << voxels[0].size()<< " total voxels" << std::endl;
     
     std::vector<ospray::cpp::SharedData> voxel_data;
-    glfwOspWindow.colors = {vec3f(1,0,0), vec3f(0,1,0),vec3f(0,0,1)};
-    uint32_t n_of_ch = 3;
-    /*for (const auto &v : voxels) {
-      voxel_data.push_back(ospray::cpp::SharedData(v.data(), volumeDimensions));
-      }*/
+    //glfwOspWindow.colors.resize(n_of_ch); //= {vec3f(1,0,0), vec3f(0,1,0),vec3f(0,0,1)};
+    for (int i= 0; i< n_of_ch; i++){
+      // pick value on rgb hue
+      // 0-1  r-g, 1-2 g-b, 2-3 b-r
+      float hueVal = i *3.0f/n_of_ch;
+      if (hueVal < 1){
+	glfwOspWindow.colors.push_back(vec3f(1-hueVal, hueVal, 0));
+      }
+      else if(hueVal < 2){
+	glfwOspWindow.colors.push_back(vec3f(0, 2-hueVal, hueVal-1));
+      }else{
+	glfwOspWindow.colors.push_back(vec3f(hueVal-2, 0, 3-hueVal));
+      }
+    }
     
     std::fstream file;
     file.open(argv[1], std::fstream::in | std::fstream::binary);
@@ -671,7 +721,8 @@ int main(int argc, const char **argv)
 
     do{
       
-      glClear(GL_COLOR_BUFFER_BIT);
+      
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
       glEnable(GL_TEXTURE_2D);
       
       ImGui_ImplGlfwGL3_NewFrame();
@@ -681,11 +732,20 @@ int main(int argc, const char **argv)
       glEnable(GL_FRAMEBUFFER_SRGB); // Turn on sRGB conversion for OSPRay frame
       glfwOspWindow.display();
       glDisable(GL_FRAMEBUFFER_SRGB); // Disable SRGB conversion for UI
-      glDisable(GL_TEXTURE_2D);
       
       ImGui::Render();
       ImGui_ImplGlfwGL3_Render();
+
       
+      glBindTexture(GL_TEXTURE_2D, guiTextures[0]);
+      glBegin(GL_QUADS);
+      glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
+      glTexCoord2f(0.0, 1.0); glVertex3f(100.0, 0.0, 0.0);
+      glTexCoord2f(1.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
+      glTexCoord2f(1.0, 0.0); glVertex3f(0.0, 100.0, 0.0);
+      glEnd();
+      
+      glDisable(GL_TEXTURE_2D);
       // Swap buffers
       glfwSwapBuffers(glfwWindow);
       
