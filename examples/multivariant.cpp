@@ -36,6 +36,7 @@
 
 #include "voxelGeneration.h"
 #include "TransferFunctionWidget.h"
+#include "Histogram.h"
 
 // stl
 #include <random>
@@ -61,7 +62,6 @@ vec2i windowSize{1024,768};
 unsigned int texture;
 unsigned int guiTextures[128];
 unsigned int guiTextureSize = 0;
-
 
 GLFWwindow *glfwWindow = nullptr;
 
@@ -93,6 +93,10 @@ public:
   std::vector<vec3f> colors;
   std::vector<float> colorIntensities;
   std::vector<tfnw::TransferFunctionWidget> tfn_widgets;
+
+  std::vector<std::vector<float> >* voxel_data;
+  std::vector<Histogram> histograms; 
+
   
   GLFWOSPWindow(){
     activeWindow = this;
@@ -229,7 +233,7 @@ void GLFWOSPWindow::buildUI(){
      renderer.commit();
   }
   
-    if (ImGui::TreeNode("Selection State: Multiple Selection"))
+    if (ImGui::TreeNode("Transfer Function Selection"))
     {
       bool renderAttributeChanged = false;
       bool tfnsChanged = false;
@@ -244,12 +248,10 @@ void GLFWOSPWindow::buildUI(){
 				&colorIntensities[n], 0.001f, 10.f)){
 	    std::vector<vec3f> tmpColors;
 	    std::vector<float> tmpOpacities;
-	    vec3f middleColor = colors[n];
-	    //tmpColors.push_back(colors[n]);
 	    
 	    {
 	      auto alphaOpacities = tfn_widgets[n].get_alpha_control_pts();
-	      for (int i=0;i<alphaOpacities.size();i++){
+	      for (uint32_t i=0;i<alphaOpacities.size();i++){
 		tmpColors.push_back(colors[n]);
 		tmpOpacities.push_back(alphaOpacities[i].y * colorIntensities[n]);
 	      }
@@ -267,7 +269,7 @@ void GLFWOSPWindow::buildUI(){
 	    std::vector<vec3f> tmpColors;
 	    std::vector<float> tmpOpacities;
 	    auto alphaOpacities = tfn_widgets[n].get_alpha_control_pts();
-	    for (int i=0;i<alphaOpacities.size();i++){
+	    for (uint32_t i=0;i<alphaOpacities.size();i++){
 	      tmpColors.push_back(colors[n]);
 	      tmpOpacities.push_back((alphaOpacities[i].y) * colorIntensities[n]);
 
@@ -378,25 +380,6 @@ void GLFWOSPWindow::reshape(int w, int h)
 
 }
 
-#define checkImageWidth 64
-#define checkImageHeight 64
-static GLubyte checkImage[checkImageHeight][checkImageWidth][4];
-
-void makeCheckImage(void)
-{
-   int i, j, c;
-    
-   for (i = 0; i < checkImageHeight; i++) {
-      for (j = 0; j < checkImageWidth; j++) {
-         c = ((((i&0x8)==0)^((j&0x8))==0))*255;
-         checkImage[i][j][0] = (GLubyte) c;
-         checkImage[i][j][1] = (GLubyte) c;
-         checkImage[i][j][2] = (GLubyte) c;
-         checkImage[i][j][3] = (GLubyte) 255;
-      }
-   }
-}
-
 
 void init (void* fb){
     glEnable(GL_TEXTURE_2D);
@@ -418,23 +401,6 @@ void init (void* fb){
 		 GL_RGBA,
 		 GL_FLOAT,
 		 fb);
-
-    makeCheckImage();
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-    glGenTextures(1, &guiTextures[guiTextureSize]);
-    glBindTexture(GL_TEXTURE_2D, guiTextures[guiTextureSize]);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, 
-		    GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 
-		    GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, checkImageWidth, 
-		 checkImageHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
-		 checkImage);
-    guiTextureSize++;
 
 }
 
@@ -555,8 +521,8 @@ int main(int argc, const char **argv)
     n_of_ch = std::stoi(argv[5]);
 #else
     vec3i volumeDimensions(200, 200, 200);
-    std::vector<std::vector<float> > voxels = generateVoxels_3ch(volumeDimensions, numPoints);
-    uint32_t n_of_ch = 3;
+    std::vector<std::vector<float> > voxels = generateVoxels_3ch(volumeDimensions, 10);
+    n_of_ch = 3;
 #endif
     //std::vector<std::vector<float> > voxels = generateVoxels_nch(volumeDimensions, numPoints, 3);
     //std::cout << voxels.size()<<" channels "
@@ -567,14 +533,13 @@ int main(int argc, const char **argv)
     
     std::vector<ospray::cpp::SharedData> voxel_data;
     //glfwOspWindow.colors.resize(n_of_ch); //= {vec3f(1,0,0), vec3f(0,1,0),vec3f(0,0,1)};
-    for (int i= 0; i< n_of_ch; i++){
+    for (uint32_t i=0; i< n_of_ch; i++){
       // pick value on rgb hue
       // 0-1  r-g, 1-2 g-b, 2-3 b-r
       float hueVal = i *3.0f/n_of_ch;
       if (hueVal < 1){
 	glfwOspWindow.colors.push_back(vec3f(1-hueVal, hueVal, 0));
-      }
-      else if(hueVal < 2){
+      }else if(hueVal < 2){
 	glfwOspWindow.colors.push_back(vec3f(0, 2-hueVal, hueVal-1));
       }else{
 	glfwOspWindow.colors.push_back(vec3f(hueVal-2, 0, 3-hueVal));
@@ -589,7 +554,7 @@ int main(int argc, const char **argv)
 
     for (uint32_t j =0; j<n_of_ch; j++){
       float min=math::inf, max=0;
-      for(int i=0; i<volumeDimensions.long_product();i++){
+      for(uint32_t i=0; i<volumeDimensions.long_product();i++){
 
 #ifndef DEMO_VOL
 	uint16_t buff;
@@ -609,6 +574,7 @@ int main(int argc, const char **argv)
 
     }
     file.close();
+    glfwOspWindow.voxel_data = &voxels_read;
     
     for (const auto &v : voxels_read) {
       voxel_data.push_back(ospray::cpp::SharedData(v.data(), volumeDimensions));
@@ -717,8 +683,15 @@ int main(int argc, const char **argv)
     glfwOspWindow.setFunc();
     glfwOspWindow.reshape(windowSize.x, windowSize.y);
 
+    //set histogram texture
+    
+    Histogram h;
+    h.makeImage(voxels_read, 0, 1);
+    h.createImageTexture();
+    
     glfwSetInputMode(glfwWindow, GLFW_STICKY_KEYS, GL_TRUE);
 
+    
     do{
       
       
@@ -737,7 +710,7 @@ int main(int argc, const char **argv)
       ImGui_ImplGlfwGL3_Render();
 
       
-      glBindTexture(GL_TEXTURE_2D, guiTextures[0]);
+      glBindTexture(GL_TEXTURE_2D, h.texName);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
       glTexCoord2f(0.0, 1.0); glVertex3f(100.0, 0.0, 0.0);

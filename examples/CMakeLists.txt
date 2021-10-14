@@ -16,6 +16,7 @@ add_executable(ospTutorial_mtvCpp
   voxelGeneration.cpp
   imgui_impl_glfw_gl3.cpp
   TransferFunctionWidget.cpp
+  Histogram.cpp
   )
 
 target_link_libraries(ospTutorial_mtvCpp
