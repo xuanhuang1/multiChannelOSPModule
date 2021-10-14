@@ -68,6 +68,7 @@ GLFWwindow *glfwWindow = nullptr;
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
 static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate"};
 static const std::vector<std::string> frontBackStr = {"alpha blend"/*, "hue preserve", "highest value dominate"*/};
+static std::vector<std::string> attributeStr = {};
 
 class GLFWOSPWindow{
 public:
@@ -87,14 +88,20 @@ public:
   int tfnType = 1;
   int blendMode = 0;
   int frontBackBlendMode = 0;
+  
+  // the list of render attributes 
   std::vector<int> renderAttributesData;
+  // the bool list of if each attribute is selected to render
   std::deque<bool> renderAttributeSelection;
+  // the list of render attributes weights, determined by histogram
+  std::vector<float> renderAttributesWeights;
+  
   std::vector<ospray::cpp::TransferFunction> tfns;
   std::vector<vec3f> colors;
-  std::vector<float> colorIntensities;
-  std::vector<tfnw::TransferFunctionWidget> tfn_widgets;
+  std::vector<float> colorIntensities; // opacity modifier
+  std::vector<tfnw::TransferFunctionWidget> tfn_widgets; // store opacities only
 
-  std::vector<std::vector<float> >* voxel_data;
+  std::vector<std::vector<float> >* voxel_data; // pointer to voxels data
   std::vector<Histogram> histograms; 
 
   
@@ -194,6 +201,12 @@ bool frontBackBlendModeUI_callback(void *, int index, const char **out_text)
   return true;
 }
 
+bool renderAttributeUI_callback(void *, int index, const char **out_text)
+{
+  *out_text = attributeStr[index].c_str();
+  return true;
+}
+
 
 void GLFWOSPWindow::buildUI(){
   ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
@@ -202,6 +215,7 @@ void GLFWOSPWindow::buildUI(){
   static int whichtfnType = 1;
   static int whichBlendMode = 0;
   static int whichFrontBackBlendMode = 0;
+  static float ratio = 0.5;
   
   if (ImGui::Combo("tfn##whichtfnType",
 		   &whichtfnType,
@@ -231,7 +245,7 @@ void GLFWOSPWindow::buildUI(){
      frontBackBlendMode = whichFrontBackBlendMode;
      renderer.setParam("frontBackBlendMode", frontBackBlendMode); 
      renderer.commit();
-  }
+    }
   
     if (ImGui::TreeNode("Transfer Function Selection"))
     {
@@ -306,6 +320,52 @@ void GLFWOSPWindow::buildUI(){
       
       ImGui::TreePop();
     }
+
+    if (ImGui::TreeNode("Histogram Selection"))
+    {
+      
+      for (uint32_t n = 0; n < histograms.size(); n++){
+	if ((ImGui::Combo("channel_x##whichChannel0Hist"+n,
+			 (int*)(&histograms[n].ch_index_0),
+			 renderAttributeUI_callback,
+			 nullptr,
+			 renderAttributesData.size()))
+	  ||(ImGui::Combo("channel_y##whichChannel0Hist"+n,
+			 (int*)(&histograms[n].ch_index_1),
+			 renderAttributeUI_callback,
+			 nullptr,
+			  renderAttributesData.size())))
+	      {
+		histograms[n].makeImage();
+		histograms[n].recreateImageTexture();
+	      }
+
+	// slider for ratio
+	// change rendering and imgui line
+	ImVec2 hImgSize(120, 120);
+	ImVec2 lineEndP(0,0);
+	if(ImGui::SliderFloat(("ratio hist"+std::to_string(n)).c_str(),
+				&ratio, 0.f, 1.f)){
+	  histograms[n].ratio = ratio;
+	  renderAttributesWeights[histograms[n].ch_index_1] = renderAttributesWeights[histograms[n].ch_index_0] * histograms[n].ratio;
+	  
+	}
+	
+	float img_k = hImgSize.y / hImgSize.x;
+	if (histograms[n].ratio > atan(img_k)/M_PI * 2 ){
+	  lineEndP.y = hImgSize.y;
+	  lineEndP.x = hImgSize.y / tan(histograms[n].ratio * M_PI/2);
+	}else{
+	  lineEndP.x = hImgSize.x;
+	  lineEndP.y = hImgSize.x * tan(histograms[n].ratio * M_PI/2);
+	}
+	// add histogram image 
+	ImVec2 p = ImGui::GetCursorScreenPos();
+	ImGui::Image((void*)(intptr_t)histograms[n].texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
+	ImGui::GetWindowDrawList()->AddLine(ImVec2(p.x , p.y + hImgSize.y), ImVec2(p.x + lineEndP.x, p.y+ hImgSize.y - lineEndP.y), IM_COL32(255, 255, 255, 255), 3.0f);
+      }
+      ImGui::TreePop();
+    }
  
   ImGui::End();
 
@@ -325,6 +385,9 @@ void GLFWOSPWindow::motion(double x, double y)
 
     bool cameraChanged = leftDown || rightDown || middleDown;
 
+    // don't modify camera with mouse on ui window
+    if (ImGui::GetIO().WantCaptureMouse) return;
+    
     if (leftDown) {
       const vec2f mouseFrom(clamp(prev.x * 2.f / windowSize.x - 1.f, -1.f, 1.f),
 			    clamp(prev.y * 2.f / windowSize.y - 1.f, -1.f, 1.f));
@@ -571,7 +634,8 @@ int main(int argc, const char **argv)
 #endif
       }
       glfwOspWindow.tfns.push_back(makeTransferFunctionForColor(vec2f(min, max), glfwOspWindow.colors[j]));
-
+      attributeStr.push_back(std::to_string(j));
+      glfwOspWindow.renderAttributesWeights.push_back(1.f);
     }
     file.close();
     glfwOspWindow.voxel_data = &voxels_read;
@@ -664,7 +728,7 @@ int main(int argc, const char **argv)
 
     glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
     // create GLFW window
-    glfwWindow = glfwCreateWindow(windowSize.x, windowSize.y, "OSPRay Tutorial", nullptr, nullptr);
+    glfwWindow = glfwCreateWindow(windowSize.x, windowSize.y, "Multichannel viewer", nullptr, nullptr);
 
     if (!glfwWindow) {
       glfwTerminate();
@@ -685,9 +749,10 @@ int main(int argc, const char **argv)
 
     //set histogram texture
     
-    Histogram h;
-    h.makeImage(voxels_read, 0, 1);
+    Histogram h(voxels_read, 0, 1);
+    h.makeImage();
     h.createImageTexture();
+    glfwOspWindow.histograms.push_back(h);
     
     glfwSetInputMode(glfwWindow, GLFW_STICKY_KEYS, GL_TRUE);
 
@@ -713,9 +778,9 @@ int main(int argc, const char **argv)
       glBindTexture(GL_TEXTURE_2D, h.texName);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
-      glTexCoord2f(0.0, 1.0); glVertex3f(100.0, 0.0, 0.0);
+      glTexCoord2f(1.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
       glTexCoord2f(1.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
-      glTexCoord2f(1.0, 0.0); glVertex3f(0.0, 100.0, 0.0);
+      glTexCoord2f(0.0, 1.0); glVertex3f(0.0, 100.0, 0.0);
       glEnd();
       
       glDisable(GL_TEXTURE_2D);
