@@ -132,9 +132,9 @@ std::vector<std::vector<float> > generateVoxels_3ch(vec3i volumeDimensions,
 {
   std::vector<std::vector<float> > voxels_list;
 
-  voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(-.1f, 0, 0), 1.f));
+  voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(-.3f, 0, 0), 1.f));
   voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(0, 0.5, 0), 1.f));
-  voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(.1f, 0, 0), 1.f));  
+  voxels_list.push_back(generateVoxels_center_1ch(volumeDimensions, numPoints, vec3f(.3f, 0, 0), 1.f));  
   return voxels_list;
 }
 

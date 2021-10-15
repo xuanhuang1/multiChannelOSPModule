@@ -777,7 +777,7 @@ int main(int argc, const char **argv)
       ImGui::Render();
       ImGui_ImplGlfwGL3_Render();
 
-      
+      /*
       glBindTexture(GL_TEXTURE_2D, h.texName);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
@@ -785,6 +785,7 @@ int main(int argc, const char **argv)
       glTexCoord2f(1.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
       glTexCoord2f(0.0, 1.0); glVertex3f(0.0, 100.0, 0.0);
       glEnd();
+      */
       
       glDisable(GL_TEXTURE_2D);
       // Swap buffers
