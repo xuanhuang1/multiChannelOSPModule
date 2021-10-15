@@ -18,6 +18,7 @@ struct Multivariant
   int blendMode;
   int frontBackBlendMode;
   Data1D renderAttributes;
+  Data1D renderAttributesWeights;
   int numAttributes;
   int tfnType;
   TransferFunction** tfns;

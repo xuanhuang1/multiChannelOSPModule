@@ -18,6 +18,7 @@ struct Multivariant : public Renderer
   bool visibleLights{false};
   bool scannedVisibleLightList{true};
   Ref<const DataT<int> > renderAttributes;
+  Ref<const DataT<float> > renderAttributesWeights;
   Ref<const DataT<TransferFunction *> > tfs;
   std::vector<void *> tfIEs;
 };

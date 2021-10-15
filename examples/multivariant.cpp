@@ -66,7 +66,7 @@ unsigned int guiTextureSize = 0;
 GLFWwindow *glfwWindow = nullptr;
 
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
-static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate"};
+static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted"};
 static const std::vector<std::string> frontBackStr = {"alpha blend"/*, "hue preserve", "highest value dominate"*/};
 static std::vector<std::string> attributeStr = {};
 
@@ -86,7 +86,7 @@ public:
   std::unique_ptr<ArcballCamera> arcballCamera;
 
   int tfnType = 1;
-  int blendMode = 0;
+  int blendMode = 4;
   int frontBackBlendMode = 0;
   
   // the list of render attributes 
@@ -213,7 +213,7 @@ void GLFWOSPWindow::buildUI(){
   ImGui::Begin("Another Window", nullptr, flags);
   ImGui::Text("Hello from another window!");
   static int whichtfnType = 1;
-  static int whichBlendMode = 0;
+  static int whichBlendMode = 4;
   static int whichFrontBackBlendMode = 0;
   static float ratio = 0.5;
   
@@ -323,7 +323,6 @@ void GLFWOSPWindow::buildUI(){
 
     if (ImGui::TreeNode("Histogram Selection"))
     {
-      
       for (uint32_t n = 0; n < histograms.size(); n++){
 	if ((ImGui::Combo("channel_x##whichChannel0Hist"+n,
 			 (int*)(&histograms[n].ch_index_0),
@@ -344,11 +343,12 @@ void GLFWOSPWindow::buildUI(){
 	// change rendering and imgui line
 	ImVec2 hImgSize(120, 120);
 	ImVec2 lineEndP(0,0);
-	if(ImGui::SliderFloat(("ratio hist"+std::to_string(n)).c_str(),
-				&ratio, 0.f, 1.f)){
+	if(ImGui::SliderFloat(("ratio x:y hist"+std::to_string(n)).c_str(),
+				&ratio, 0.001f, 0.999f)){
 	  histograms[n].ratio = ratio;
-	  renderAttributesWeights[histograms[n].ch_index_1] = renderAttributesWeights[histograms[n].ch_index_0] * histograms[n].ratio;
-	  
+	  renderAttributesWeights[histograms[n].ch_index_0] = renderAttributesWeights[histograms[n].ch_index_1] * tan(histograms[n].ratio * M_PI/2);
+	  renderer.setParam("renderAttributesWeights", ospray::cpp::CopiedData(renderAttributesWeights));
+	  renderer.commit();
 	}
 	
 	float img_k = hImgSize.y / hImgSize.x;
@@ -634,9 +634,8 @@ int main(int argc, const char **argv)
 #endif
       }
       glfwOspWindow.tfns.push_back(makeTransferFunctionForColor(vec2f(min, max), glfwOspWindow.colors[j]));
-      attributeStr.push_back(std::to_string(j));
-      glfwOspWindow.renderAttributesWeights.push_back(1.f);
     }
+    
     file.close();
     glfwOspWindow.voxel_data = &voxels_read;
     
@@ -688,6 +687,8 @@ int main(int argc, const char **argv)
       glfwOspWindow.renderAttributesData.push_back(i);
       glfwOspWindow.renderAttributeSelection.push_back(true);
       glfwOspWindow.colorIntensities.push_back(1);
+      attributeStr.push_back(std::to_string(i));
+      glfwOspWindow.renderAttributesWeights.push_back(1.f);
       tfnw::TransferFunctionWidget tmp;
       tmp.setGuiText("colormap " +std::to_string(i));
       glfwOspWindow.tfn_widgets.push_back(tmp);
@@ -699,6 +700,8 @@ int main(int argc, const char **argv)
     renderer->setParam("backgroundColor", 0.f); // white, transparent
     renderer->setParam("blendMode", glfwOspWindow.blendMode); // 0:add color 1: alpha blend
     renderer->setParam("renderAttributes", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesData));
+    renderer->setParam("renderAttributesWeights", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesWeights));
+    
     renderer->setParam("numAttributes", voxels_read.size());
     renderer->setParam("tfnType", glfwOspWindow.tfnType); // 0:same tfn all channel 1: pick evenly on hue
     renderer->setParam("transferFunctions", ospray::cpp::CopiedData(glfwOspWindow.tfns)); 

@@ -157,15 +157,15 @@ struct vec4f huePreserveBlend(struct vec4f c1, struct vec4f c2){
        return c_new;
 }
 
-struct vec4f highestDominateBlend(struct vec4f c1, struct vec4f c2){
-       if (c1.w > c2.w) return c1;
+struct vec4f highestDominateBlend(struct vec4f c1, struct vec4f c2, float val_a, float val_b){
+       if (val_a > val_b) return c1;
        else return c2;
 }
 
 
-struct vec4f blendByMode(struct vec4f a, struct vec4f b, uniform unsigned int blendMode){
+struct vec4f blendByMode(struct vec4f a, struct vec4f b, float val_a, float val_b, uniform unsigned int blendMode, const uniform Multivariant *uniform self){
 
-  struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
+  struct vec4f ret = {1.f, 1.f, 1.f, 1.f};
   
   if (blendMode == 0)
      ret = addBlend(a, b);
@@ -174,18 +174,20 @@ struct vec4f blendByMode(struct vec4f a, struct vec4f b, uniform unsigned int bl
   else if (blendMode == 2)
      ret = huePreserveBlend(a, b);
   else if (blendMode == 3)
-     ret = highestDominateBlend(a, b);
+     ret = highestDominateBlend(a, b, a.w, b.w);
+  else if (blendMode == 4)
+     ret = highestDominateBlend(a, b, a.w, b.w);
   return ret;
   
 }
 
 
 struct vec4f blendWithSameTF(varying float* samples,
-	       	     		uniform unsigned int32 M,
-			      VolumetricModel *uniform m,
-			      uniform unsigned int blendMode,
-    			      const uniform Multivariant *uniform self,
-			      uniform unsigned int *uniform attributeIndices)
+	       	     	     uniform unsigned int32 M,
+			     VolumetricModel *uniform m,
+			     uniform unsigned int blendMode,
+    			     const uniform Multivariant *uniform self,
+			     uniform unsigned int *uniform attributeIndices)
 {
 	
   struct vec4f ret = {0.f, 0.f, 0.f, 1.f};
@@ -196,7 +198,7 @@ struct vec4f blendWithSameTF(varying float* samples,
       struct vec4f tmp = self->tfns[tfn_index]->get(self->tfns[tfn_index], samples[i]);
       //struct vec4f tmp = {0.f, 1.f, 1.f, 1.f};
       if (i == 0) ret = tmp;
-      else ret = blendByMode(ret, tmp, blendMode);
+      else ret = blendByMode(ret, tmp, ret.w, tmp.w,  blendMode, self);
   }
   
   return ret;
@@ -250,7 +252,8 @@ struct vec4f blendWithDiffHue(varying float* samples,
   unsigned int order[128];
   unsigned int attributeIndicesRand[128];
   struct vec4f base_colors[128];
-  
+  vkl_range1f ranges[128];
+
   RNGState state;
   seed_rng(&state, programIndex);
   
@@ -259,6 +262,7 @@ struct vec4f blendWithDiffHue(varying float* samples,
       order[i] = random(&state)%3;
       attributeIndicesRand[i] = attributeIndices[(i)%M];
       base_colors[i] = self->tfns[tfn_index]->get(self->tfns[tfn_index], samples[i]);
+      ranges[i]= vklGetValueRange(m->volume->vklVolume, i);
   }
  
   //quick_sort(attributeIndicesRand, M, order);
@@ -272,10 +276,15 @@ struct vec4f blendWithDiffHue(varying float* samples,
   //ret.w = 1.f;
   //return ret;
 
+  int prev_i = 0;
+  
   for (uniform int i=0; i<M; i++){
       struct vec4f base_color = base_colors[i];
-      
-      if (blendMode == 2){ 
+      if (blendMode == 0)
+      	 ret = addBlend(ret, base_color);
+      else if (blendMode == 1)
+     	  ret = alphaBlend(ret, base_color);
+      else if (blendMode == 2){ 
 	struct vec4f c_hsl = base_color;
 	if (i==0) {
 	   //c_maxs2 = c_hsl;
@@ -296,8 +305,21 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	      c_maxs2 = c_hsl;	
 	   }
 	}
-      }else
-	ret = blendByMode(ret, base_color, blendMode);
+      }else if (blendMode == 3){
+     	  ret = highestDominateBlend(ret, base_color, ret.w, base_color.w);
+      }else if (blendMode == 4){
+      	  if (i == 0) prev_i = 0;
+	  float prev_weight = get_float(self->renderAttributesWeights, prev_i);
+	  float this_weight = get_float(self->renderAttributesWeights, i);
+	  
+	  float prev_val = (samples[prev_i] - ranges[prev_i].lower) / (ranges[prev_i].upper - ranges[prev_i].lower);
+	  float this_val = (samples[i] - ranges[i].lower) / (ranges[i].upper - ranges[i].lower);
+
+	  ret = highestDominateBlend(ret, base_color, prev_weight*prev_val, this_weight*this_val);
+	  
+	  if (prev_weight <= this_weight)
+	     prev_weight = i;
+      }
   }
 
   if (blendMode == 2){

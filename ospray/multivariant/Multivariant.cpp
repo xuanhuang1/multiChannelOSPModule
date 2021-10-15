@@ -29,7 +29,8 @@ void Multivariant::commit()
   visibleLights = getParam<bool>("visibleLights", false);
 
   renderAttributes = getParamDataT<int>("renderAttributes", false);
-
+  renderAttributesWeights = getParamDataT<float>("renderAttributesWeights", false);
+ 
   tfs = getParamDataT<TransferFunction *>("transferFunctions", false);
   
   tfIEs = createArrayOfIE(*tfs);
@@ -42,6 +43,7 @@ void Multivariant::commit()
 			 getParam<int>("blendMode", 0),
 			 getParam<int>("frontBackBlendMode", 0),
 			 ispc(renderAttributes),
+			 ispc(renderAttributesWeights),
 			 getParam<int>("numAttributes", 0),
 			 getParam<int>("tfnType", 0),
 			 tfIEs.data()
