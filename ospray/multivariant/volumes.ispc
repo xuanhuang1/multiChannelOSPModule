@@ -194,7 +194,7 @@ struct vec4f blendWithSameTF(varying float* samples,
   
       
   for (uniform i=0; i<M; i++){
-      uniform int tfn_index = attributeIndices[i];
+      uniform int tfn_index = 0;//attributeIndices[i];
       struct vec4f tmp = self->tfns[tfn_index]->get(self->tfns[tfn_index], samples[i]);
       //struct vec4f tmp = {0.f, 1.f, 1.f, 1.f};
       if (i == 0) ret = tmp;
@@ -317,8 +317,8 @@ struct vec4f blendWithDiffHue(varying float* samples,
 
 	  ret = highestDominateBlend(ret, base_color, prev_weight*prev_val, this_weight*this_val);
 	  
-	  if (prev_weight <= this_weight)
-	     prev_weight = i;
+	  if (prev_weight*prev_val <= this_weight*this_val)
+	     prev_i = i;
       }
   }
 

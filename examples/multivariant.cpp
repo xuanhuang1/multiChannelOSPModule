@@ -51,7 +51,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw_gl3.h"
 
-//#define DEMO_VOL 
+#define DEMO_VOL 
 
 using namespace rkcommon;
 using namespace rkcommon::math;
