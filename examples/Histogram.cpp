@@ -103,7 +103,8 @@ void Histogram::createImageTexture(){
 
 
 void Histogram::recreateImageTexture(){
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, HistImageHeight, 
+  glBindTexture(GL_TEXTURE_2D, texName);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, HistImageHeight, 
 	       HistImageWidth, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
 	       image);
 }

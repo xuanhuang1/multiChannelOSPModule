@@ -361,6 +361,7 @@ void GLFWOSPWindow::buildUI(){
 	}
 	// add histogram image 
 	ImVec2 p = ImGui::GetCursorScreenPos();
+	
 	ImGui::Image((void*)(intptr_t)histograms[n].texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
 	ImGui::GetWindowDrawList()->AddLine(ImVec2(p.x , p.y + hImgSize.y), ImVec2(p.x + lineEndP.x, p.y+ hImgSize.y - lineEndP.y), IM_COL32(255, 255, 255, 255), 3.0f);
       }
@@ -767,8 +768,9 @@ int main(int argc, const char **argv)
       glEnable(GL_TEXTURE_2D);
       
       ImGui_ImplGlfwGL3_NewFrame();
+      
+      //glBindTexture(GL_TEXTURE_2D, h.texName);
       glfwOspWindow.buildUI();
-
       
       glEnable(GL_FRAMEBUFFER_SRGB); // Turn on sRGB conversion for OSPRay frame
       glfwOspWindow.display();
@@ -776,10 +778,8 @@ int main(int argc, const char **argv)
       
       ImGui::Render();
       ImGui_ImplGlfwGL3_Render();
-
-      /*
-      glBindTexture(GL_TEXTURE_2D, h.texName);
-      glBegin(GL_QUADS);
+      
+      /*glBegin(GL_QUADS);
       glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
       glTexCoord2f(1.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
       glTexCoord2f(1.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
