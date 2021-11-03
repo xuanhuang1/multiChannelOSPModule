@@ -57,8 +57,8 @@ using namespace rkcommon;
 using namespace rkcommon::math;
 
 // image size
-vec2i imgSize{1024, 768};
-vec2i windowSize{1024,768};
+vec2i imgSize{400, 300};
+vec2i windowSize{800,600};
 unsigned int texture;
 unsigned int guiTextures[128];
 unsigned int guiTextureSize = 0;
@@ -157,8 +157,8 @@ void GLFWOSPWindow::display()
    glTexImage2D(GL_TEXTURE_2D,
 		0,
 		GL_RGBA32F,
-		windowSize.x,
-		windowSize.y,
+		imgSize.x,
+		imgSize.y,
 		0,
 		GL_RGBA,
 		GL_FLOAT,
@@ -428,7 +428,7 @@ void GLFWOSPWindow::reshape(int w, int h)
   auto buffers = OSP_FB_COLOR | OSP_FB_DEPTH | OSP_FB_ACCUM | OSP_FB_ALBEDO
       | OSP_FB_NORMAL;
   framebuffer =
-    ospray::cpp::FrameBuffer(windowSize.x, windowSize.y, OSP_FB_RGBA32F, buffers);
+    ospray::cpp::FrameBuffer(imgSize.x, imgSize.y, OSP_FB_RGBA32F, buffers);
   framebuffer.commit();
   
   glViewport(0, 0, windowSize.x, windowSize.y);
@@ -459,8 +459,8 @@ void init (void* fb){
     glTexImage2D(GL_TEXTURE_2D,
 		 0,
 		 GL_RGBA32F,
-		 windowSize.x,
-		 windowSize.y,
+		 imgSize.x,
+		 imgSize.y,
 		 0,
 		 GL_RGBA,
 		 GL_FLOAT,
@@ -584,7 +584,7 @@ int main(int argc, const char **argv)
     vec3i volumeDimensions(std::stoi(argv[2]), std::stoi(argv[3]), std::stoi(argv[4]));
     n_of_ch = std::stoi(argv[5]);
 #else
-    vec3i volumeDimensions(200, 200, 200);
+    vec3i volumeDimensions(100, 100, 100);
     std::vector<std::vector<float> > voxels = generateVoxels_3ch(volumeDimensions, 10);
     n_of_ch = 3;
 #endif
