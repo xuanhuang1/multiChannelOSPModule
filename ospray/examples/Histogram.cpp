@@ -1,7 +1,5 @@
 #include "Histogram.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#include <iostream>
+
 Histogram::Histogram(std::vector<std::vector<float> > &voxels,
 			  uint32_t _ch_index_0, uint32_t _ch_index_1)
 {
@@ -84,7 +82,6 @@ void Histogram::makeImage()
    this->ch_index_1 = ch_index_1;
 }
 
-
 void Histogram::createImageTexture(){
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
@@ -111,43 +108,3 @@ void Histogram::recreateImageTexture(){
 	       HistImageWidth, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
 	       image);
 }
-
-
-
-void SegHistogram::loadImage(char* filename){
-  int nChannels;
-  filename = filename;
-  std::cout << "load image:"<< filename <<"?" << (image!=nullptr) <<"\n";
-  image = stbi_load(filename, &width, &height, &nChannels, 0);
-  std::cout <<width <<" "<<height <<" "<<nChannels <<" \n";
-
-}
-
-
-void SegHistogram::createImageTexture(){
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-  glGenTextures(1, &texName);
-  glBindTexture(GL_TEXTURE_2D, texName);
-
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, 
-		  GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 
-		  GL_NEAREST);
-
-  // flip w h cuase opengl is col major
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, height, 
-	       width, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
-	       image);
-}
-
-
-void SegHistogram::recreateImageTexture(){
-  glBindTexture(GL_TEXTURE_2D, texName);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, height, 
-	       width, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
-	       image);
-}
-

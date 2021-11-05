@@ -51,7 +51,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw_gl3.h"
 
-//#define DEMO_VOL 
+#define DEMO_VOL 
 
 using namespace rkcommon;
 using namespace rkcommon::math;
@@ -103,7 +103,7 @@ public:
 
   std::vector<std::vector<float> >* voxel_data; // pointer to voxels data
   std::vector<Histogram> histograms; 
-  SegHistogram segHist;
+
   
   GLFWOSPWindow(){
     activeWindow = this;
@@ -621,7 +621,7 @@ int main(int argc, const char **argv)
       for(uint32_t i=0; i<volumeDimensions.long_product();i++){
 
 #ifndef DEMO_VOL
-	float buff;
+	uint16_t buff;
 	file.read((char*)(&buff), sizeof(buff));
 	voxels_read[j].push_back(float(buff));
 	if (float(buff) > max) max = float(buff);
@@ -753,13 +753,10 @@ int main(int argc, const char **argv)
 
     //set histogram texture
     
-    Histogram h(voxels_read, 0, 0);
+    Histogram h(voxels_read, 0, 1);
     h.makeImage();
     h.createImageTexture();
     glfwOspWindow.histograms.push_back(h);
-
-    glfwOspWindow.segHist.loadImage("/home/xuanhuang/Desktop/JH2_user_100_100_4_segs.png");
-    glfwOspWindow.segHist.createImageTexture();
     
     glfwSetInputMode(glfwWindow, GLFW_STICKY_KEYS, GL_TRUE);
 
@@ -781,16 +778,14 @@ int main(int argc, const char **argv)
       
       ImGui::Render();
       ImGui_ImplGlfwGL3_Render();
-
-      glfwOspWindow.segHist.recreateImageTexture();
       
-      glBegin(GL_QUADS);
+      /*glBegin(GL_QUADS);
       glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
       glTexCoord2f(1.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
       glTexCoord2f(1.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
       glTexCoord2f(0.0, 1.0); glVertex3f(0.0, 100.0, 0.0);
       glEnd();
-      
+      */
       
       glDisable(GL_TEXTURE_2D);
       // Swap buffers

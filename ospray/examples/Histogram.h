@@ -24,17 +24,3 @@ public:
   void createImageTexture();
   void recreateImageTexture();
 };
-
-class SegHistogram{
-public:
-  unsigned char* image;
-  unsigned int texName;
-  int width;
-  int height;
-  char* filename;
-  SegHistogram(){};
-  void loadImage(char* filename);
-  void createImageTexture();
-  void recreateImageTexture();
-  ~SegHistogram(){delete[] image;}
-};
