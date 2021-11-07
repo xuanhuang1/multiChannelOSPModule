@@ -324,12 +324,12 @@ void GLFWOSPWindow::buildUI(){
     if (ImGui::TreeNode("Histogram Selection"))
     {
       for (uint32_t n = 0; n < histograms.size(); n++){
-	if ((ImGui::Combo("channel_x##whichChannel0Hist"+n,
+	if ((ImGui::Combo("channel_y##whichChannel0Hist"+n,
 			 (int*)(&histograms[n].ch_index_0),
 			 renderAttributeUI_callback,
 			 nullptr,
 			 renderAttributesData.size()))
-	  ||(ImGui::Combo("channel_y##whichChannel0Hist"+n,
+	  ||(ImGui::Combo("channel_x##whichChannel0Hist"+n,
 			 (int*)(&histograms[n].ch_index_1),
 			 renderAttributeUI_callback,
 			 nullptr,
@@ -343,10 +343,10 @@ void GLFWOSPWindow::buildUI(){
 	// change rendering and imgui line
 	ImVec2 hImgSize(120, 120);
 	ImVec2 lineEndP(0,0);
-	if(ImGui::SliderFloat(("ratio x:y hist"+std::to_string(n)).c_str(),
+	if(ImGui::SliderFloat(("ratio y:x hist"+std::to_string(n)).c_str(),
 				&ratio, 0.001f, 0.999f)){
 	  histograms[n].ratio = ratio;
-	  renderAttributesWeights[histograms[n].ch_index_0] = renderAttributesWeights[histograms[n].ch_index_1] * tan(histograms[n].ratio * M_PI/2);
+	  renderAttributesWeights[histograms[n].ch_index_0] = renderAttributesWeights[histograms[n].ch_index_1] / tan(histograms[n].ratio * M_PI/2);
 	  renderer.setParam("renderAttributesWeights", ospray::cpp::CopiedData(renderAttributesWeights));
 	  renderer.commit();
 	}
@@ -622,6 +622,7 @@ int main(int argc, const char **argv)
 
 #ifndef DEMO_VOL
 	float buff;
+	//uint16_t buff;
 	file.read((char*)(&buff), sizeof(buff));
 	voxels_read[j].push_back(float(buff));
 	if (float(buff) > max) max = float(buff);
@@ -752,8 +753,9 @@ int main(int argc, const char **argv)
     glfwOspWindow.reshape(windowSize.x, windowSize.y);
 
     //set histogram texture
-    
+
     Histogram h(voxels_read, 0, 0);
+    if (n_of_ch > 1) h.ch_index_1 = 1;
     h.makeImage();
     h.createImageTexture();
     glfwOspWindow.histograms.push_back(h);
@@ -782,13 +784,21 @@ int main(int argc, const char **argv)
       ImGui::Render();
       ImGui_ImplGlfwGL3_Render();
 
-      glfwOspWindow.segHist.recreateImageTexture();
-      
+      //glfwOspWindow.segHist.recreateImageTexture();
+      glBindTexture(GL_TEXTURE_2D, glfwOspWindow.histograms[0].texName);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
       glTexCoord2f(1.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
       glTexCoord2f(1.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
       glTexCoord2f(0.0, 1.0); glVertex3f(0.0, 100.0, 0.0);
+      glEnd();
+
+      glBindTexture(GL_TEXTURE_2D, glfwOspWindow.segHist.texName);
+      glBegin(GL_QUADS);
+      glTexCoord2f(0.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
+      glTexCoord2f(1.0, 0.0); glVertex3f(200.0, 0.0, 0.0);
+      glTexCoord2f(1.0, 1.0); glVertex3f(200.0, 100.0, 0.0);
+      glTexCoord2f(0.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
       glEnd();
       
       

@@ -14,11 +14,11 @@ Histogram::Histogram(std::vector<std::vector<float> > &voxels,
 void Histogram::makeImage()
 {
   
-  float image_f[HistImageWidth][HistImageHeight];
+  float image_f[HistImageHeight][HistImageWidth];
   
-  for (uint32_t i = 0; i < HistImageWidth; i++) {
-      for (uint32_t j = 0; j < HistImageHeight; j++) {
-	image[i][j][3] = (GLubyte) 255;
+  for (uint32_t i = 0; i < HistImageHeight; i++) {
+      for (uint32_t j = 0; j < HistImageWidth; j++) {
+        image[i][j][3] = (GLubyte) 255;
 	image_f[i][j] = 0;
       }
   }
@@ -38,31 +38,31 @@ void Histogram::makeImage()
    for (uint32_t j = 0; j < (*voxels_ptr)[0].size(); j++) {
      float val0 = (*voxels_ptr)[ch_index_0][j];
      float val1 = (*voxels_ptr)[ch_index_1][j];
-     uint32_t index_w = (val0 - range0[0])
-       / ((range0[1] - range0[0])/HistImageWidth );
-     uint32_t index_h = (val1 - range1[0])
-       / ((range1[1] - range1[0])/HistImageHeight);
+     uint32_t index_0 = (val0 - range0[0])
+       / ((range0[1] - range0[0])/HistImageHeight );
+     uint32_t index_1 = (val1 - range1[0])
+       / ((range1[1] - range1[0])/HistImageWidth);
 
-     /*if (index_h + index_w != 0)*/{
-       index_h = std::min(index_h, uint32_t(HistImageHeight-1));
-       index_w = std::min(index_w, uint32_t(HistImageWidth-1));
-       image_f[index_w][index_h] += 1.f;
+     {
+       index_1 = std::min(index_1, uint32_t(HistImageWidth-1));
+       index_0 = std::min(index_0, uint32_t(HistImageHeight-1));
+       image_f[index_0][index_1] += 1.f;
      }
    }
 
    float maxCount = 0;
 
-   for (uint32_t i = 0; i < HistImageWidth; i++) {
-     for (uint32_t j = 0; j < HistImageHeight; j++) {
+   for (uint32_t i = 0; i < HistImageHeight; i++) {
+     for (uint32_t j = 0; j < HistImageWidth; j++) {
        maxCount = std::max(maxCount, image_f[i][j]);
      }
    }
 
    // hack here
-   maxCount = 1000;
+   maxCount = 200;
 
-   for (uint32_t i = 0; i < HistImageWidth; i++) {
-     for (uint32_t j = 0; j < HistImageHeight; j++) {
+   for (uint32_t i = 0; i < HistImageHeight; i++) {
+     for (uint32_t j = 0; j < HistImageWidth; j++) {
        uint32_t c = std::min(image_f[i][j] / maxCount *255.f, 255.0f);
        if (c == 0) {
 	 image[i][j][0] = (GLubyte)100;
@@ -72,12 +72,14 @@ void Histogram::makeImage()
        }
        image[i][j][0] = (GLubyte) c;
        image[i][j][1] = (GLubyte) 0;
-       image[i][j][2] = (GLubyte) (255 - c);
+       image[i][j][2] = (GLubyte) (255 - c);       
      }
      //std::cout <<"\n";
    }
    //std::cout <<"\n";
 
+   for (int i=0; i<4; i++)
+     image[16][32][i] = 255;
    
 
    this->ch_index_0 = ch_index_0;
@@ -98,17 +100,16 @@ void Histogram::createImageTexture(){
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 
 		  GL_NEAREST);
 
-  // flip w h cuase opengl is col major
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, HistImageHeight, 
-	       HistImageWidth, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, HistImageWidth, 
+	       HistImageHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
 	       image);
 }
 
 
 void Histogram::recreateImageTexture(){
   glBindTexture(GL_TEXTURE_2D, texName);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, HistImageHeight, 
-	       HistImageWidth, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, HistImageWidth, 
+	       HistImageHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
 	       image);
 }
 
@@ -121,6 +122,20 @@ void SegHistogram::loadImage(char* filename){
   image = stbi_load(filename, &width, &height, &nChannels, 0);
   std::cout <<width <<" "<<height <<" "<<nChannels <<" \n";
 
+  
+  for (int i=0; i<height/2.0+1; i++){
+    for (int j=0; j<width; j++){
+      for (int k=0; k<nChannels; k++){
+	unsigned char temp = image[i*width*nChannels + j*nChannels + k];
+	image[i*width*nChannels + j*nChannels + k] = image[(height-1-i)*width*nChannels + j*nChannels + k];
+	image[(height-1-i)*width*nChannels + j*nChannels + k] = temp;
+	//image[i*width*nChannels + j*nChannels + k] = 100;
+	//image[(height-1-i)*width*nChannels + j*nChannels + k] = 100;
+      }
+    }
+  }
+  //for (int k=0; k<nChannels; k++)
+  //  image[25*width*nChannels + 50*nChannels + k] = 250;
 }
 
 
@@ -136,18 +151,16 @@ void SegHistogram::createImageTexture(){
 		  GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 
 		  GL_NEAREST);
-
-  // flip w h cuase opengl is col major
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, height, 
-	       width, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, 
+	       height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
 	       image);
 }
 
 
 void SegHistogram::recreateImageTexture(){
   glBindTexture(GL_TEXTURE_2D, texName);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, height, 
-	       width, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width,
+	       height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
 	       image);
 }
 

@@ -6,12 +6,12 @@
 #include <GLFW/glfw3.h>
 
 
-#define HistImageWidth 32
-#define HistImageHeight 32
+#define HistImageWidth 64
+#define HistImageHeight 64
 
 class Histogram{
 public:
-  GLubyte image[HistImageWidth][HistImageHeight][4];
+  GLubyte image[HistImageHeight][HistImageWidth][4];
   unsigned int texName;
   uint32_t ch_index_0;
   uint32_t ch_index_1;
