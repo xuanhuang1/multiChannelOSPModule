@@ -319,6 +319,31 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	  
 	  if (prev_weight*prev_val <= this_weight*this_val)
 	     prev_i = i;
+      }else if (blendMode == 5){
+      	    //
+	    //
+	    //		LOTS OF HARDCODED PARAMETERS
+	    //
+	    //
+	    //
+      	  if (i ==1){
+	  //float prev_weight = get_float(self->renderAttributesWeights, prev_i);
+	  //float this_weight = get_float(self->renderAttributesWeights, i);
+	  
+	  int prev_val = (samples[prev_i] - ranges[prev_i].lower) / (ranges[prev_i].upper - ranges[prev_i].lower) * 100.f;
+	  int this_val = (samples[i] - ranges[i].lower) / (ranges[i].upper - ranges[i].lower)* 100.f;
+
+	  // modify here to sample texture for rgb value
+	  // use only alpha from the first channel
+	  // 2d index is [prev_val][this_val] col major texture image
+	  int idx = prev_val*100*4 + this_val*4;
+
+	  float r = get_uint8(self->histMaskTexture, idx) / 255.f;
+	  float g = get_uint8(self->histMaskTexture, idx+1) / 255.f;
+	  float b = get_uint8(self->histMaskTexture, idx+2) / 255.f;
+	  ret.x = r; ret.y = g; ret.z=b, ret.w = base_colors[0].w;
+
+	  }
       }
   }
 

@@ -158,6 +158,7 @@ export void Multivariant_set(void *uniform _self,
     uniform int frontBackBlendMode,
     const Data1D *uniform renderAttributes,
     const Data1D *uniform renderAttributesWeights,
+    const Data1D *uniform histMaskTexture,
     uniform int numAttributes,
     uniform int tfnType,
     void *uniform tfns)
@@ -171,7 +172,8 @@ export void Multivariant_set(void *uniform _self,
   self->blendMode = blendMode;
   self->frontBackBlendMode = frontBackBlendMode;
   self->renderAttributes = *renderAttributes;
-  self->renderAttributesWeights = *renderAttributesWeights;  
+  self->renderAttributesWeights = *renderAttributesWeights;
+  self->histMaskTexture = *histMaskTexture;
   self->numAttributes = numAttributes;
   self->tfnType = tfnType;
   self->tfns = (TransferFunction * *uniform) tfns;

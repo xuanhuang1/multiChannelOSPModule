@@ -27,7 +27,7 @@ public:
 
 class SegHistogram{
 public:
-  unsigned char* image;
+  std::vector<unsigned char> image;;
   unsigned int texName;
   int width;
   int height;
@@ -36,5 +36,4 @@ public:
   void loadImage(char* filename);
   void createImageTexture();
   void recreateImageTexture();
-  ~SegHistogram(){delete[] image;}
 };

@@ -35,6 +35,9 @@ void Histogram::makeImage()
      range1[1] = std::max(range1[1], (*voxels_ptr)[ch_index_1][j]);
    }
 
+   std::cout << "range:"<< range0[0] <<" "<<range0[1]
+	     <<"  "<<range1[0]<<" "<<range1[1]<<"\n";
+
    for (uint32_t j = 0; j < (*voxels_ptr)[0].size(); j++) {
      float val0 = (*voxels_ptr)[ch_index_0][j];
      float val1 = (*voxels_ptr)[ch_index_1][j];
@@ -78,8 +81,8 @@ void Histogram::makeImage()
    }
    //std::cout <<"\n";
 
-   for (int i=0; i<4; i++)
-     image[16][32][i] = 255;
+   //for (int i=0; i<4; i++)
+   //  image[16][32][i] = 255;
    
 
    this->ch_index_0 = ch_index_0;
@@ -116,26 +119,30 @@ void Histogram::recreateImageTexture(){
 
 
 void SegHistogram::loadImage(char* filename){
-  int nChannels;
+  int nChannels, read_nChannels;
   filename = filename;
-  std::cout << "load image:"<< filename <<"?" << (image!=nullptr) <<"\n";
-  image = stbi_load(filename, &width, &height, &nChannels, 0);
+  unsigned char* image_read = stbi_load(filename, &width, &height, &read_nChannels, 0);
   std::cout <<width <<" "<<height <<" "<<nChannels <<" \n";
 
+  if (read_nChannels == 3) nChannels = 4;
+  image.resize(width*height*nChannels);
+
+  if (read_nChannels == 3){
+    for (int i=0; i<height; i++)
+      for (int j=0; j<width; j++)
+	image[i*width*nChannels + j*nChannels + 3] = 255;
+  }
   
   for (int i=0; i<height/2.0+1; i++){
     for (int j=0; j<width; j++){
-      for (int k=0; k<nChannels; k++){
-	unsigned char temp = image[i*width*nChannels + j*nChannels + k];
-	image[i*width*nChannels + j*nChannels + k] = image[(height-1-i)*width*nChannels + j*nChannels + k];
-	image[(height-1-i)*width*nChannels + j*nChannels + k] = temp;
-	//image[i*width*nChannels + j*nChannels + k] = 100;
-	//image[(height-1-i)*width*nChannels + j*nChannels + k] = 100;
+      for (int k=0; k<read_nChannels; k++){
+	image[i*width*nChannels + j*nChannels + k] = image_read[(height-1-i)*width*read_nChannels + j*read_nChannels + k];
+	image[(height-1-i)*width*nChannels + j*nChannels + k] = image_read[i*width*read_nChannels + j*read_nChannels + k];
       }
     }
   }
-  //for (int k=0; k<nChannels; k++)
-  //  image[25*width*nChannels + 50*nChannels + k] = 250;
+  delete[] image_read;
+  
 }
 
 
@@ -153,7 +160,7 @@ void SegHistogram::createImageTexture(){
 		  GL_NEAREST);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, 
 	       height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
-	       image);
+	       &image[0]);
 }
 
 
@@ -161,6 +168,6 @@ void SegHistogram::recreateImageTexture(){
   glBindTexture(GL_TEXTURE_2D, texName);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width,
 	       height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
-	       image);
+	       &image[0]);
 }
 

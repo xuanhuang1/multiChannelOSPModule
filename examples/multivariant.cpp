@@ -66,7 +66,7 @@ unsigned int guiTextureSize = 0;
 GLFWwindow *glfwWindow = nullptr;
 
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
-static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted"};
+static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted", "user define histogram mask"};
 static const std::vector<std::string> frontBackStr = {"alpha blend"/*, "hue preserve", "highest value dominate"*/};
 static std::vector<std::string> attributeStr = {};
 
@@ -86,7 +86,7 @@ public:
   std::unique_ptr<ArcballCamera> arcballCamera;
 
   int tfnType = 1;
-  int blendMode = 4;
+  int blendMode = 5;
   int frontBackBlendMode = 0;
   
   // the list of render attributes 
@@ -213,7 +213,7 @@ void GLFWOSPWindow::buildUI(){
   ImGui::Begin("Another Window", nullptr, flags);
   ImGui::Text("Hello from another window!");
   static int whichtfnType = 1;
-  static int whichBlendMode = 4;
+  static int whichBlendMode = 5;
   static int whichFrontBackBlendMode = 0;
   static float ratio = 0.5;
   
@@ -574,6 +574,24 @@ int main(int argc, const char **argv)
   
   // use scoped lifetimes of wrappers to release everything before ospShutdown()
   {
+
+    
+    // initialize GLFW
+    if (!glfwInit()) {
+      throw std::runtime_error("Failed to initialize GLFW!");
+    }
+
+    glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
+    // create GLFW window
+    glfwWindow = glfwCreateWindow(windowSize.x, windowSize.y, "Multichannel viewer", nullptr, nullptr);
+
+    if (!glfwWindow) {
+      glfwTerminate();
+      throw std::runtime_error("Failed to create GLFW window!");
+    }
+    // make the window's context current
+    glfwMakeContextCurrent(glfwWindow);
+
     
     GLFWOSPWindow glfwOspWindow;
 
@@ -624,9 +642,9 @@ int main(int argc, const char **argv)
 	float buff;
 	//uint16_t buff;
 	file.read((char*)(&buff), sizeof(buff));
-	voxels_read[j].push_back(float(buff));
-	if (float(buff) > max) max = float(buff);
-	if (float(buff) < min) min = float(buff);
+	voxels_read[j].push_back(float(buff)*10000);
+	if (float(buff)*10000 > max) max = float(buff*10000);
+	if (float(buff)*10000 < min) min = float(buff*10000);
 	//max = 2000;
 #else
 	voxels_read[j].push_back(voxels[j][i]);
@@ -696,6 +714,17 @@ int main(int argc, const char **argv)
       glfwOspWindow.tfn_widgets.push_back(tmp);
     }
 
+    //set histogram texture        
+    Histogram h(voxels_read, 0, 0);
+    if (n_of_ch > 1) h.ch_index_1 = 1;
+    h.makeImage();
+    h.createImageTexture();
+    glfwOspWindow.histograms.push_back(h);
+ 
+    glfwOspWindow.segHist.loadImage("/home/xuanhuang/Desktop/JH2_topo_100_100_7_segs_2.png");
+    glfwOspWindow.segHist.createImageTexture();
+    
+
 
     // complete setup of renderer
     renderer->setParam("aoSamples", 1);
@@ -703,6 +732,8 @@ int main(int argc, const char **argv)
     renderer->setParam("blendMode", glfwOspWindow.blendMode); // 0:add color 1: alpha blend
     renderer->setParam("renderAttributes", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesData));
     renderer->setParam("renderAttributesWeights", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesWeights));
+
+    renderer->setParam("histMaskTexture", ospray::cpp::CopiedData(glfwOspWindow.segHist.image));
     
     renderer->setParam("numAttributes", voxels_read.size());
     renderer->setParam("tfnType", glfwOspWindow.tfnType); // 0:same tfn all channel 1: pick evenly on hue
@@ -726,23 +757,8 @@ int main(int argc, const char **argv)
     
     glfwOspWindow.renderNewFrame();
 
-    // initialize GLFW
-    if (!glfwInit()) {
-      throw std::runtime_error("Failed to initialize GLFW!");
-    }
 
-    glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
-    // create GLFW window
-    glfwWindow = glfwCreateWindow(windowSize.x, windowSize.y, "Multichannel viewer", nullptr, nullptr);
-
-    if (!glfwWindow) {
-      glfwTerminate();
-      throw std::runtime_error("Failed to create GLFW window!");
-    }
-
-    // make the window's context current
-    glfwMakeContextCurrent(glfwWindow);
-
+    
     ImGui_ImplGlfwGL3_Init(glfwWindow, true);
     ImGui::StyleColorsDark();
     
@@ -752,16 +768,6 @@ int main(int argc, const char **argv)
     glfwOspWindow.setFunc();
     glfwOspWindow.reshape(windowSize.x, windowSize.y);
 
-    //set histogram texture
-
-    Histogram h(voxels_read, 0, 0);
-    if (n_of_ch > 1) h.ch_index_1 = 1;
-    h.makeImage();
-    h.createImageTexture();
-    glfwOspWindow.histograms.push_back(h);
-
-    glfwOspWindow.segHist.loadImage("/home/xuanhuang/Desktop/JH2_user_100_100_4_segs.png");
-    glfwOspWindow.segHist.createImageTexture();
     
     glfwSetInputMode(glfwWindow, GLFW_STICKY_KEYS, GL_TRUE);
 
