@@ -29,7 +29,7 @@ void Histogram::makeImage()
   // make a 2d histogram
   float range0[2], range1[2];
   range0[0] = (*voxels_ptr)[ch_index_0][0]; range0[1] = (*voxels_ptr)[ch_index_0][0];
-  range1[0] = (*voxels_ptr)[ch_index_1][0]; range0[0] = (*voxels_ptr)[ch_index_1][0];
+  range1[0] = (*voxels_ptr)[ch_index_1][0]; range1[1] = (*voxels_ptr)[ch_index_1][0];
   
    for (uint32_t j = 0; j < (*voxels_ptr)[0].size(); j++) {
      range0[0] = std::min(range0[0], (*voxels_ptr)[ch_index_0][j]);
