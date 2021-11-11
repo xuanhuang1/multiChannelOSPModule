@@ -23,6 +23,9 @@ void Histogram::makeImage()
       }
   }
 
+  if(voxels_ptr == nullptr) std::cout << "no input voxel for 2d histogram\n";
+  else std::cout <<"voxels data for 2d histogram dim:"<< (*voxels_ptr).size()<<"x"<<(*voxels_ptr)[0].size()<<"\n";
+  
   // make a 2d histogram
   float range0[2], range1[2];
   range0[0] = (*voxels_ptr)[ch_index_0][0]; range0[1] = (*voxels_ptr)[ch_index_0][0];
@@ -122,7 +125,7 @@ void SegHistogram::loadImage(char* filename){
   int nChannels, read_nChannels;
   filename = filename;
   unsigned char* image_read = stbi_load(filename, &width, &height, &read_nChannels, 0);
-  std::cout <<width <<" "<<height <<" "<<nChannels <<" \n";
+  std::cout <<"mask image: "<<width <<"x"<<height <<"x"<<read_nChannels <<" \n";
 
   if (read_nChannels == 3) nChannels = 4;
   image.resize(width*height*nChannels);

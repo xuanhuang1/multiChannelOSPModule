@@ -642,9 +642,9 @@ int main(int argc, const char **argv)
 	float buff;
 	//uint16_t buff;
 	file.read((char*)(&buff), sizeof(buff));
-	voxels_read[j].push_back(float(buff)*10000);
-	if (float(buff)*10000 > max) max = float(buff*10000);
-	if (float(buff)*10000 < min) min = float(buff*10000);
+	voxels_read[j].push_back(float(buff));
+	if (float(buff) > max) max = float(buff);
+	if (float(buff) < min) min = float(buff);
 	//max = 2000;
 #else
 	voxels_read[j].push_back(voxels[j][i]);
@@ -657,6 +657,8 @@ int main(int argc, const char **argv)
     }
     
     file.close();
+
+    std::cout << voxels_read.size() << "x"<<voxels_read[0].size() <<" voxels read in" <<std::endl;
     glfwOspWindow.voxel_data = &voxels_read;
     
     for (const auto &v : voxels_read) {
