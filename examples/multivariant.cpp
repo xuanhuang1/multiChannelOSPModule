@@ -367,6 +367,71 @@ void GLFWOSPWindow::buildUI(){
       }
       ImGui::TreePop();
     }
+
+    if (ImGui::TreeNode("External Segmentation"))
+    {
+      	// add histogram image 
+	ImVec2 p = ImGui::GetCursorScreenPos();
+	ImVec2 hImgSize(120, 120);
+	ImGui::Image((void*)(intptr_t)histograms[0].texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
+	ImGui::SameLine(p.x + hImgSize.x);
+	ImVec2 p2 = ImGui::GetCursorScreenPos();
+	ImGui::Image((void*)(intptr_t)segHist.texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
+
+	const ImGuiIO &io = ImGui::GetIO();
+	bool clicked_on_item = false;
+
+	if (ImGui::IsItemHovered() && (io.MouseDown[0] || io.MouseDown[1])) {
+	  clicked_on_item = true;
+	}
+
+	const vec2f view_offset(p2.x, p.y);
+	const vec2f view_scale(hImgSize.x, hImgSize.y);
+	
+	ImVec2 bbmin = ImGui::GetItemRectMin();
+	ImVec2 bbmax = ImGui::GetItemRectMax();
+	ImVec2 clipped_mouse_pos = ImVec2(std::min(std::max(io.MousePos.x, bbmin.x), bbmax.x),
+					  std::min(std::max(io.MousePos.y, bbmin.y), bbmax.y));
+	static float col1[3];
+	static float col2[3];
+	  
+	if (clicked_on_item) {
+	  vec2f mouse_pos = (vec2f(clipped_mouse_pos.x, clipped_mouse_pos.y) - view_offset) / view_scale * vec2f(segHist.width, segHist.height);
+	  mouse_pos.x = clamp(mouse_pos.x, 0.f, segHist.width+0.f);
+	  mouse_pos.y = segHist.height - clamp(mouse_pos.y, 0.f, segHist.height+0.f);
+	  int color_index = int(mouse_pos.y)*segHist.width*segHist.nChannels + int(mouse_pos.x)*segHist.nChannels;
+	  /*std::cout << "click: "<<int(mouse_pos.x) <<" "<<int(mouse_pos.y)<<" ("
+		    << int(segHist.image[color_index + 0])<<" "
+		    << int(segHist.image[color_index + 1])<<" "
+		    << int(segHist.image[color_index + 2])<<" )"
+		    <<"\n";*/
+	  col1[0] = int(segHist.image[color_index + 0])/255.f;
+	  col1[1] = int(segHist.image[color_index + 1])/255.f;
+	  col1[2] = int(segHist.image[color_index + 2])/255.f;
+	  
+	}
+	for (int i=0; i<3; i++)
+	  col2[i] = col1[i];
+	
+	if(ImGui::ColorEdit3("color 1", col1)){
+	  for (int m =0; m <segHist.width*segHist.height; m++){
+	    bool color_equal = true;
+	    for (int i=0; i<3; i++){
+	      if(segHist.image[m*segHist.nChannels+i] != int(col2[i]*255)){
+		color_equal = false;
+	      }
+	    }
+	    if (color_equal){
+	      for (int i=0; i<3; i++)
+		segHist.image[m*segHist.nChannels+i] = int(col1[i]*255);
+	    }
+	  }
+	  segHist.recreateImageTexture();
+	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	  renderer.commit();
+	}
+	ImGui::TreePop();
+    }
  
   ImGui::End();
 
@@ -793,7 +858,7 @@ int main(int argc, const char **argv)
       ImGui_ImplGlfwGL3_Render();
 
       //glfwOspWindow.segHist.recreateImageTexture();
-      glBindTexture(GL_TEXTURE_2D, glfwOspWindow.histograms[0].texName);
+      /*glBindTexture(GL_TEXTURE_2D, glfwOspWindow.histograms[0].texName);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
       glTexCoord2f(1.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
@@ -808,7 +873,7 @@ int main(int argc, const char **argv)
       glTexCoord2f(1.0, 1.0); glVertex3f(200.0, 100.0, 0.0);
       glTexCoord2f(0.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
       glEnd();
-      
+      */
       
       glDisable(GL_TEXTURE_2D);
       // Swap buffers

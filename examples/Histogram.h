@@ -31,6 +31,7 @@ public:
   unsigned int texName;
   int width;
   int height;
+  int nChannels;
   char* filename;
   SegHistogram(){};
   void loadImage(char* filename);

@@ -122,12 +122,13 @@ void Histogram::recreateImageTexture(){
 
 
 void SegHistogram::loadImage(char* filename){
-  int nChannels, read_nChannels;
+  int read_nChannels;
   filename = filename;
   unsigned char* image_read = stbi_load(filename, &width, &height, &read_nChannels, 0);
   std::cout <<"mask image: "<<width <<"x"<<height <<"x"<<read_nChannels <<" \n";
 
-  if (read_nChannels == 3) nChannels = 4;
+  nChannels = 4;
+  //if (read_nChannels == 3) nChannels = 4;
   image.resize(width*height*nChannels);
 
   if (read_nChannels == 3){
