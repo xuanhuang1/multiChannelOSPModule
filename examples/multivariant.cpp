@@ -376,7 +376,8 @@ void GLFWOSPWindow::buildUI(){
 	ImGui::Image((void*)(intptr_t)histograms[0].texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
 	ImGui::SameLine(p.x + hImgSize.x);
 	ImVec2 p2 = ImGui::GetCursorScreenPos();
-	ImGui::Image((void*)(intptr_t)segHist.texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
+	ImGui::Image((void*)(intptr_t)segHist.segTexName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
+
 
 	const ImGuiIO &io = ImGui::GetIO();
 	bool clicked_on_item = false;
@@ -394,7 +395,9 @@ void GLFWOSPWindow::buildUI(){
 					  std::min(std::max(io.MousePos.y, bbmin.y), bbmax.y));
 	static float col1[3];
 	static float col2[3];
-	  
+	static float alpha_scaler;
+	
+	
 	if (clicked_on_item) {
 	  vec2f mouse_pos = (vec2f(clipped_mouse_pos.x, clipped_mouse_pos.y) - view_offset) / view_scale * vec2f(segHist.width, segHist.height);
 	  mouse_pos.x = clamp(mouse_pos.x, 0.f, segHist.width+0.f);
@@ -405,9 +408,9 @@ void GLFWOSPWindow::buildUI(){
 		    << int(segHist.image[color_index + 1])<<" "
 		    << int(segHist.image[color_index + 2])<<" )"
 		    <<"\n";*/
-	  col1[0] = int(segHist.image[color_index + 0])/255.f;
-	  col1[1] = int(segHist.image[color_index + 1])/255.f;
-	  col1[2] = int(segHist.image[color_index + 2])/255.f;
+	  col1[0] = int(segHist.segImage[color_index + 0])/255.f;
+	  col1[1] = int(segHist.segImage[color_index + 1])/255.f;
+	  col1[2] = int(segHist.segImage[color_index + 2])/255.f;
 	  
 	}
 	for (int i=0; i<3; i++)
@@ -417,19 +420,35 @@ void GLFWOSPWindow::buildUI(){
 	  for (int m =0; m <segHist.width*segHist.height; m++){
 	    bool color_equal = true;
 	    for (int i=0; i<3; i++){
-	      if(segHist.image[m*segHist.nChannels+i] != int(col2[i]*255)){
+	      if(segHist.segImage[m*segHist.nChannels+i] != int(col2[i]*255)){
 		color_equal = false;
 	      }
 	    }
 	    if (color_equal){
 	      for (int i=0; i<3; i++)
-		segHist.image[m*segHist.nChannels+i] = int(col1[i]*255);
+		segHist.segImage[m*segHist.nChannels+i] = int(col1[i]*255);
 	    }
 	  }
 	  segHist.recreateImageTexture();
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
+	
+	if (ImGui::SliderFloat("scale opacity", &alpha_scaler, 0.001f, 10.000f)){
+	  for (int m =0; m <segHist.width*segHist.height; m++){
+	    bool color_equal = true;
+	    for (int i=0; i<3; i++){
+	      if(segHist.segImage[m*segHist.nChannels+i] != int(col1[i]*255))
+		color_equal = false;
+	    }
+	    if (color_equal)
+	       segHist.scaleAlphaForPixel(alpha_scaler, m*segHist.nChannels);
+	  }
+	  segHist.recreateImageTexture();
+	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	  renderer.commit();
+	}
+
 	ImGui::TreePop();
     }
  
@@ -513,7 +532,8 @@ void GLFWOSPWindow::reshape(int w, int h)
 void init (void* fb){
     glEnable(GL_TEXTURE_2D);
     glDisable(GL_LIGHTING);
-
+    //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    //glEnable( GL_BLEND );
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
     // set the texture wrapping/filtering options (on the currently bound texture object)
@@ -788,11 +808,13 @@ int main(int argc, const char **argv)
     h.createImageTexture();
     glfwOspWindow.histograms.push_back(h);
  
-    glfwOspWindow.segHist.loadImage("/home/xuanhuang/Desktop/JH2_topo_100_100_7_segs_2.png");
+    glfwOspWindow.segHist.loadImage("/home/xuanhuang/Desktop/JH2_topo_100_100_5_segs.png");
+    glfwOspWindow.segHist.loadDistImage("/home/xuanhuang/Desktop/dist.png");
+    glfwOspWindow.segHist.applyDistAsAlpha();
     glfwOspWindow.segHist.createImageTexture();
+    glfwOspWindow.segHist.createDistImageTexture();
+
     
-
-
     // complete setup of renderer
     renderer->setParam("aoSamples", 1);
     renderer->setParam("backgroundColor", 0.f); // white, transparent
@@ -858,7 +880,7 @@ int main(int argc, const char **argv)
       ImGui_ImplGlfwGL3_Render();
 
       //glfwOspWindow.segHist.recreateImageTexture();
-      /*glBindTexture(GL_TEXTURE_2D, glfwOspWindow.histograms[0].texName);
+      glBindTexture(GL_TEXTURE_2D, glfwOspWindow.segHist.segTexName);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
       glTexCoord2f(1.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
@@ -866,14 +888,15 @@ int main(int argc, const char **argv)
       glTexCoord2f(0.0, 1.0); glVertex3f(0.0, 100.0, 0.0);
       glEnd();
 
-      glBindTexture(GL_TEXTURE_2D, glfwOspWindow.segHist.texName);
+      glBindTexture(GL_TEXTURE_2D, glfwOspWindow.segHist.distTexName);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
       glTexCoord2f(1.0, 0.0); glVertex3f(200.0, 0.0, 0.0);
       glTexCoord2f(1.0, 1.0); glVertex3f(200.0, 100.0, 0.0);
       glTexCoord2f(0.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
       glEnd();
-      */
+
+      
       
       glDisable(GL_TEXTURE_2D);
       // Swap buffers

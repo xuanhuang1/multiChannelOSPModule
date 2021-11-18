@@ -27,8 +27,12 @@ public:
 
 class SegHistogram{
 public:
-  std::vector<unsigned char> image;;
+  std::vector<unsigned char> image;
+  std::vector<unsigned char> segImage;
+  std::vector<unsigned char> distImage;
   unsigned int texName;
+  unsigned int segTexName;
+  unsigned int distTexName;
   int width;
   int height;
   int nChannels;
@@ -37,4 +41,10 @@ public:
   void loadImage(char* filename);
   void createImageTexture();
   void recreateImageTexture();
+  
+  void loadDistImage(char* filename);
+  void createDistImageTexture(); // for display only
+
+  void applyDistAsAlpha();
+  void scaleAlphaForPixel(float scale, int col_index);
 };

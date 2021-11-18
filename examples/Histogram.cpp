@@ -2,6 +2,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include <iostream>
+
+
 Histogram::Histogram(std::vector<std::vector<float> > &voxels,
 			  uint32_t _ch_index_0, uint32_t _ch_index_1)
 {
@@ -130,7 +132,8 @@ void SegHistogram::loadImage(char* filename){
   nChannels = 4;
   //if (read_nChannels == 3) nChannels = 4;
   image.resize(width*height*nChannels);
-
+  segImage.resize(width*height*nChannels);
+  
   if (read_nChannels == 3){
     for (int i=0; i<height; i++)
       for (int j=0; j<width; j++)
@@ -145,6 +148,12 @@ void SegHistogram::loadImage(char* filename){
       }
     }
   }
+  
+  for (int i=0; i<height; i++)
+    for (int j=0; j<width; j++)
+      for (int k=0; k<nChannels; k++)
+	segImage[i*width*nChannels + j*nChannels + k] = image[i*width*nChannels + j*nChannels + k];
+	
   delete[] image_read;
   
 }
@@ -165,13 +174,106 @@ void SegHistogram::createImageTexture(){
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, 
 	       height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
 	       &image[0]);
+
+  
+  glGenTextures(1, &segTexName);
+  glBindTexture(GL_TEXTURE_2D, segTexName);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, 
+		  GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 
+		  GL_NEAREST);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, 
+	       height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
+	       &segImage[0]);
 }
 
 
 void SegHistogram::recreateImageTexture(){
+  
   glBindTexture(GL_TEXTURE_2D, texName);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width,
 	       height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
 	       &image[0]);
+
+  glBindTexture(GL_TEXTURE_2D, segTexName);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width,
+         height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
+  	       &segImage[0]);
 }
 
+
+
+void SegHistogram::loadDistImage(char* distFileName){
+  int read_nChannels;
+  int read_width, read_height, read_channel;
+  unsigned char* image_read = stbi_load(distFileName, &read_width, &read_height, &read_nChannels, 0);
+  if ((read_width != width) || (read_height != read_height)){
+    // dim has to match to the segmetation image
+    std::cerr << "size mismatch: "<< width <<"x"<<height <<" expected, "
+	      << read_width <<"x"<<read_height<<" read\n";
+    return;
+  }else
+    std::cout <<"dist image: "<<read_width <<"x"<<read_height <<"x"<<read_nChannels <<" \n";
+  
+    
+  //if (read_nChannels == 3) nChannels = 4;
+  distImage.resize(width*height*nChannels);
+
+  if (read_nChannels == 3){
+    for (int i=0; i<height; i++)
+      for (int j=0; j<width; j++)
+	distImage[i*width*nChannels + j*nChannels + 3] = 255;
+  }
+  
+  for (int i=0; i<height/2.0+1; i++){
+    for (int j=0; j<width; j++){
+      for (int k=0; k<read_nChannels; k++){
+	distImage[i*width*nChannels + j*nChannels + k] = image_read[(height-1-i)*width*read_nChannels + j*read_nChannels + k];
+	distImage[(height-1-i)*width*nChannels + j*nChannels + k] = image_read[i*width*read_nChannels + j*read_nChannels + k];
+      }
+    }
+  }
+  
+  delete[] image_read;
+
+}
+
+void SegHistogram::createDistImageTexture(){
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+  glGenTextures(1, &distTexName);
+  glBindTexture(GL_TEXTURE_2D, distTexName);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, 
+		  GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 
+		  GL_NEAREST);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, 
+	       height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 
+	       &distImage[0]);
+}
+
+
+void SegHistogram::applyDistAsAlpha(){
+  if ((!distImage.size()) || (!image.size())){
+    std::cerr << "distance or segmentation is empty!\n";
+    return;
+  }
+  for (int i=0; i<height; i++)
+      for (int j=0; j<width; j++)
+	image[i*width*nChannels + j*nChannels + 3] = distImage[i*width*nChannels + j*nChannels];
+
+}
+
+void SegHistogram::scaleAlphaForPixel(float scale, int col_index){
+  if ((!distImage.size()) || (!image.size())){
+    std::cerr << "distance or segmentation is empty!\n";
+    return;
+  }
+  image[col_index + 3] = std::min(int(distImage[col_index]*scale), 255);
+}
