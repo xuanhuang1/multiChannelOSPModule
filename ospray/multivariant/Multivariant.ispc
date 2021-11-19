@@ -161,7 +161,8 @@ export void Multivariant_set(void *uniform _self,
     const Data1D *uniform histMaskTexture,
     uniform int numAttributes,
     uniform int tfnType,
-    void *uniform tfns)
+    void *uniform tfns,
+    void *uniform distFn)
 {
   uniform Multivariant *uniform self = (uniform Multivariant * uniform) _self;
 
@@ -177,6 +178,7 @@ export void Multivariant_set(void *uniform _self,
   self->numAttributes = numAttributes;
   self->tfnType = tfnType;
   self->tfns = (TransferFunction * *uniform) tfns;
+  self->distFn = (TransferFunction * uniform) distFn;
 }
 
 vec3f Multivariant_computeAO(const uniform Multivariant *uniform self,

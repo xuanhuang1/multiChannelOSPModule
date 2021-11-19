@@ -342,9 +342,10 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	  float g = get_uint8(self->histMaskTexture, idx+1) / 255.f;
 	  float b = get_uint8(self->histMaskTexture, idx+2) / 255.f;
 	  float a = get_uint8(self->histMaskTexture, idx+3) / 255.f;
-	  if (a >0.1 ) a = 0;
-	  else a = 1-a*10;
-	  ret.x = r; ret.y = g; ret.z = b; ret.w = a;
+
+	  vec4f dist = (self->distFn->get(self->distFn, a));
+	  float w = dist.w;
+	  ret.x = r; ret.y = g; ret.z = b; ret.w = w;
 
 	  }
       }

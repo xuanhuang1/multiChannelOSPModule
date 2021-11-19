@@ -23,6 +23,7 @@ struct Multivariant
   int numAttributes;
   int tfnType;
   TransferFunction** tfns;
+  TransferFunction*  distFn;
 };
 
 struct MultivariantRenderContext

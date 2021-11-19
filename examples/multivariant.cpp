@@ -104,6 +104,8 @@ public:
   std::vector<std::vector<float> >* voxel_data; // pointer to voxels data
   std::vector<Histogram> histograms; 
   SegHistogram segHist;
+  ospray::cpp::TransferFunction distFunc;
+  tfnw::TransferFunctionWidget distFnWidget;
   
   GLFWOSPWindow(){
     activeWindow = this;
@@ -448,6 +450,36 @@ void GLFWOSPWindow::buildUI(){
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
+	
+	if (distFnWidget.changed()){
+	  std::vector<vec3f> tmpColors;
+	  std::vector<float> tmpOpacities;
+	  auto alphaOpacities = distFnWidget.get_alpha_control_pts();
+	  auto p0 = alphaOpacities[0];
+	  auto p1 = alphaOpacities[1];
+	  uint32_t current_interval_start = 0;
+	  uint32_t res = 255;
+	  for (uint32_t i=0;i<res;i++){
+	    if (i > alphaOpacities[current_interval_start+1].x*res)
+	      current_interval_start++;
+	    p0 = alphaOpacities[current_interval_start];
+	    p1 = alphaOpacities[current_interval_start+1];
+	    float current_x = i/float(res);
+	    float current_val = p0.y + (current_x - p0.x)/(p1.x - p0.x)*(p1.y - p0.y);
+	    tmpColors.push_back(vec3f(1,1,1));
+	    tmpOpacities.push_back(current_val);
+	  }
+	  distFnWidget.setUnchanged();
+	  
+	  distFunc.setParam("color", ospray::cpp::CopiedData(tmpColors));
+	  distFunc.setParam("opacity", ospray::cpp::CopiedData(tmpOpacities));
+	  distFunc.commit();
+	  renderer.setParam("distanceFunction", distFunc);
+	  renderer.commit(); 
+	}
+        
+
+	distFnWidget.draw_ui();
 
 	ImGui::TreePop();
     }
@@ -800,6 +832,8 @@ int main(int argc, const char **argv)
       tmp.setGuiText("colormap " +std::to_string(i));
       glfwOspWindow.tfn_widgets.push_back(tmp);
     }
+    
+    glfwOspWindow.distFnWidget.setGuiText("distance function");
 
     //set histogram texture        
     Histogram h(voxels_read, 0, 0);
@@ -813,6 +847,7 @@ int main(int argc, const char **argv)
     glfwOspWindow.segHist.applyDistAsAlpha();
     glfwOspWindow.segHist.createImageTexture();
     glfwOspWindow.segHist.createDistImageTexture();
+    glfwOspWindow.distFunc = makeTransferFunctionForColor(vec2f(0.f, 1.f), vec3f(1,1,1));
 
     
     // complete setup of renderer
@@ -826,7 +861,8 @@ int main(int argc, const char **argv)
     
     renderer->setParam("numAttributes", voxels_read.size());
     renderer->setParam("tfnType", glfwOspWindow.tfnType); // 0:same tfn all channel 1: pick evenly on hue
-    renderer->setParam("transferFunctions", ospray::cpp::CopiedData(glfwOspWindow.tfns)); 
+    renderer->setParam("transferFunctions", ospray::cpp::CopiedData(glfwOspWindow.tfns));
+    renderer->setParam("distanceFunction", glfwOspWindow.distFunc);
     renderer->commit();
 
     // create and setup camera

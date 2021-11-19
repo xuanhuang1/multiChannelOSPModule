@@ -112,12 +112,12 @@ void TransferFunctionWidget::draw_ui()
 
     const ImGuiIO &io = ImGui::GetIO();
 
-    ImGui::Text("Transfer Function");
+    ImGui::Text(guiText.c_str());
     ImGui::TextWrapped(
         "Left click to add a point, right click remove. "
         "Left click + drag to move points.");
-
-    if (ImGui::BeginCombo(guiText.c_str(), colormaps[selected_colormap].name.c_str())) {
+    update_colormap();
+    /*if (ImGui::BeginCombo(guiText.c_str(), colormaps[selected_colormap].name.c_str())) {
         for (size_t i = 0; i < colormaps.size(); ++i) {
             if (ImGui::Selectable(colormaps[i].name.c_str(), selected_colormap == i)) {
                 selected_colormap = i;
@@ -125,7 +125,7 @@ void TransferFunctionWidget::draw_ui()
             }
         }
         ImGui::EndCombo();
-    }
+	}*/
 
     vec2f canvas_size = ImGui::GetContentRegionAvail();
     canvas_size.y = 100;
