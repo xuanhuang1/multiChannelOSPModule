@@ -483,7 +483,8 @@ static void sampleVolume(MultivariantRenderContext &rc,
   }
 
   // Weight the opacity with deltaT using Beer law
-  vc.sample.w = exp(-vc.sample.w * dt * m->densityScale);
+  // Xuan: adjusted here for a more opaque look
+  vc.sample.w = exp(-vc.sample.w * dt * m->densityScale * 50.f);
 }
 
 static float sampleAllVolumes(MultivariantRenderContext &rc,

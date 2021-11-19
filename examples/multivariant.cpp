@@ -395,10 +395,9 @@ void GLFWOSPWindow::buildUI(){
 	ImVec2 bbmax = ImGui::GetItemRectMax();
 	ImVec2 clipped_mouse_pos = ImVec2(std::min(std::max(io.MousePos.x, bbmin.x), bbmax.x),
 					  std::min(std::max(io.MousePos.y, bbmin.y), bbmax.y));
+	static float alpha_scaler;
 	static float col1[3];
 	static float col2[3];
-	static float alpha_scaler;
-	
 	
 	if (clicked_on_item) {
 	  vec2f mouse_pos = (vec2f(clipped_mouse_pos.x, clipped_mouse_pos.y) - view_offset) / view_scale * vec2f(segHist.width, segHist.height);
@@ -413,10 +412,9 @@ void GLFWOSPWindow::buildUI(){
 	  col1[0] = int(segHist.segImage[color_index + 0])/255.f;
 	  col1[1] = int(segHist.segImage[color_index + 1])/255.f;
 	  col1[2] = int(segHist.segImage[color_index + 2])/255.f;
-	  
+  	  for (int i=0; i<3; i++)
+	    col2[i] = col1[i];
 	}
-	for (int i=0; i<3; i++)
-	  col2[i] = col1[i];
 	
 	if(ImGui::ColorEdit3("color 1", col1)){
 	  for (int m =0; m <segHist.width*segHist.height; m++){
@@ -427,16 +425,20 @@ void GLFWOSPWindow::buildUI(){
 	      }
 	    }
 	    if (color_equal){
-	      for (int i=0; i<3; i++)
+	      for (int i=0; i<3; i++){
 		segHist.segImage[m*segHist.nChannels+i] = int(col1[i]*255);
+		segHist.image[m*segHist.nChannels+i] = int(col1[i]*255);
+	      }
 	    }
 	  }
+	  for (int i=0; i<3; i++)
+	    col2[i] = col1[i];
 	  segHist.recreateImageTexture();
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
 	
-	if (ImGui::SliderFloat("scale opacity", &alpha_scaler, 0.001f, 10.000f)){
+	if (ImGui::SliderFloat("scale opacity", &alpha_scaler, 0.001f, 5.000f)){
 	  for (int m =0; m <segHist.width*segHist.height; m++){
 	    bool color_equal = true;
 	    for (int i=0; i<3; i++){
