@@ -343,6 +343,10 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	  float b = get_uint8(self->histMaskTexture, idx+2) / 255.f;
 	  float a = get_uint8(self->histMaskTexture, idx+3) / 255.f;
 
+	  // black is reserved for invisible
+	  if ((r == 0) && (g ==0) && (b == 0))
+	  return make_vec4f(0,0,0,0);
+
 	  vec4f dist = (self->distFn->get(self->distFn, a));
 	  float w = dist.w;
 	  ret.x = r; ret.y = g; ret.z = b; ret.w = w;
@@ -484,7 +488,7 @@ static void sampleVolume(MultivariantRenderContext &rc,
 
   // Weight the opacity with deltaT using Beer law
   // Xuan: adjusted here for a more opaque look
-  vc.sample.w = exp(-vc.sample.w * dt * m->densityScale * 50.f);
+  vc.sample.w = exp(-vc.sample.w * dt * m->densityScale * 100.f);
 }
 
 static float sampleAllVolumes(MultivariantRenderContext &rc,

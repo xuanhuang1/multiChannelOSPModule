@@ -192,6 +192,8 @@ void SegHistogram::createImageTexture(){
 
 
 void SegHistogram::recreateImageTexture(){
+
+  
   
   glBindTexture(GL_TEXTURE_2D, texName);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width,
@@ -276,4 +278,19 @@ void SegHistogram::scaleAlphaForPixel(float scale, int col_index){
     return;
   }
   image[col_index + 3] = std::min(int(distImage[col_index]*scale), 255);
+}
+
+
+void SegHistogram::setOutputImageFromSegImage(unsigned int from[3], unsigned int to[3]){
+  for (int m =0; m < width*height; m++){
+    bool color_equal = true;
+    for (int i=0; i<3; i++){
+      if(segImage[m*nChannels+i] != from[i])
+	color_equal = false;
+    }
+    if (color_equal){
+      for (int i=0; i<3; i++)
+	image[m*nChannels+i] = to[i];
+    }
+  }
 }

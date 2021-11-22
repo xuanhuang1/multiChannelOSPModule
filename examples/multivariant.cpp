@@ -398,6 +398,7 @@ void GLFWOSPWindow::buildUI(){
 	static float alpha_scaler;
 	static float col1[3];
 	static float col2[3];
+	static float colImage[3];
 	
 	if (clicked_on_item) {
 	  vec2f mouse_pos = (vec2f(clipped_mouse_pos.x, clipped_mouse_pos.y) - view_offset) / view_scale * vec2f(segHist.width, segHist.height);
@@ -412,6 +413,10 @@ void GLFWOSPWindow::buildUI(){
 	  col1[0] = int(segHist.segImage[color_index + 0])/255.f;
 	  col1[1] = int(segHist.segImage[color_index + 1])/255.f;
 	  col1[2] = int(segHist.segImage[color_index + 2])/255.f;
+	  
+	  colImage[0] = int(segHist.image[color_index + 0])/255.f;
+	  colImage[1] = int(segHist.image[color_index + 1])/255.f;
+	  colImage[2] = int(segHist.image[color_index + 2])/255.f;
   	  for (int i=0; i<3; i++)
 	    col2[i] = col1[i];
 	}
@@ -428,17 +433,44 @@ void GLFWOSPWindow::buildUI(){
 	      for (int i=0; i<3; i++){
 		segHist.segImage[m*segHist.nChannels+i] = int(col1[i]*255);
 		segHist.image[m*segHist.nChannels+i] = int(col1[i]*255);
+		colImage[i] = int(segHist.image[m*segHist.nChannels+i])/255.f;
 	      }
 	    }
 	  }
 	  for (int i=0; i<3; i++)
 	    col2[i] = col1[i];
+	  
 	  segHist.recreateImageTexture();
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
 	
-	if (ImGui::SliderFloat("scale opacity", &alpha_scaler, 0.001f, 5.000f)){
+	static bool invisible;
+	//std::cout << colImage[0]<<"\n";
+	if ((!colImage[0]) && (!colImage[1]) && (!colImage[2])){ invisible = true;}
+ 	else invisible = false;
+	  
+	if(ImGui::Checkbox("set invisible", &invisible)){
+	  if(invisible){
+	    // set from visible to invisible
+	    unsigned int currentCol[3] = {col1[0]*255, col1[1]*255, col1[2]*255};
+	    unsigned int toCol[3] = {0 ,0, 0};
+	    segHist.setOutputImageFromSegImage(currentCol, toCol);
+	    for (int i=0; i<3; i++)
+	      colImage[i] = 0.f;
+	  }else{
+	    unsigned int currentCol[3] = {col1[0]*255, col1[1]*255, col1[2]*255};
+	    segHist.setOutputImageFromSegImage(currentCol, currentCol);
+	    for (int i=0; i<3; i++)
+	      colImage[i] = col1[i];
+	  }
+
+	  segHist.recreateImageTexture();
+	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	  renderer.commit();
+	}
+	
+	if (ImGui::SliderFloat("scale opacity", &alpha_scaler, 0.000f, 10.000f)){
 	  for (int m =0; m <segHist.width*segHist.height; m++){
 	    bool color_equal = true;
 	    for (int i=0; i<3; i++){

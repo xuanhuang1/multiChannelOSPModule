@@ -47,4 +47,5 @@ public:
 
   void applyDistAsAlpha();
   void scaleAlphaForPixel(float scale, int col_index);
+  void setOutputImageFromSegImage(unsigned int from[3], unsigned int to[3]);
 };
