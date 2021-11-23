@@ -876,8 +876,8 @@ int main(int argc, const char **argv)
     h.createImageTexture();
     glfwOspWindow.histograms.push_back(h);
  
-    glfwOspWindow.segHist.loadImage("/home/xuanhuang/Desktop/JH2_topo_100_100_5_segs.png");
-    glfwOspWindow.segHist.loadDistImage("/home/xuanhuang/Desktop/dist.png");
+    glfwOspWindow.segHist.loadImage("/home/xuanhuang/Desktop/_100_100_8_segs.png");
+    glfwOspWindow.segHist.loadDistImage("/home/xuanhuang/Desktop/_100_100_8_segs_dist.png");
     glfwOspWindow.segHist.applyDistAsAlpha();
     glfwOspWindow.segHist.createImageTexture();
     glfwOspWindow.segHist.createDistImageTexture();

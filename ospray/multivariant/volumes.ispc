@@ -237,7 +237,8 @@ struct vec4f blendWithDiffHue(varying float* samples,
 			      VolumetricModel *uniform m,
 			      uniform unsigned int blendMode,
     			      const uniform Multivariant *uniform self,
-			      uniform unsigned int *uniform attributeIndices)
+			      uniform unsigned int *uniform attributeIndices,
+			      vec3f p)
 {
   // pick color evenly between RGB hue
   struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
@@ -280,6 +281,7 @@ struct vec4f blendWithDiffHue(varying float* samples,
   
   for (uniform int i=0; i<M; i++){
       struct vec4f base_color = base_colors[i];
+      
       if (blendMode == 0)
       	 ret = addBlend(ret, base_color);
       else if (blendMode == 1)
@@ -451,9 +453,71 @@ static void sampleVolume(MultivariantRenderContext &rc,
      if (self->tfnType == 0) 
      	vc.sample = blendWithSameTF(samples, M, m, blendMode, self, attributeIndices);
      else //if (self->tfnType == 1)
-        vc.sample = blendWithDiffHue(samples, M, m, blendMode, self, attributeIndices);
+        vc.sample = blendWithDiffHue(samples, M, m, blendMode, self, attributeIndices, p);
   }
 
+  // Xuan: blinn shading, assume directional light (1,0,0)
+
+  vec3f ns = Volume_getGradient(m->volume, p);
+  {
+     vec3f N = normalize(ns);
+     vec3f V = normalize(neg(vc.dir));
+     vec3f L = normalize(make_vec3f(10.f, -10.f, 20.f));
+     vec3f H = normalize((L+V)/sqrt(dot((L+V), (L+V))));
+     float NH = dot(N, H);
+
+     const unsigned int sampleCnt = 10;
+     RNGState state;
+     vec3f ssaoKernel[10];
+     vec3f gradient = {0.f, 0.f, 0.f};
+     float ao_scale = 0;
+     
+     for (unsigned int i = 0; i < sampleCnt; ++i)
+     {
+     seed_rng(&state, i + ((p.x+1.0)*100*100*1000 + (p.y+1.0)*100*1000 + (p.z+1.0)*1000));
+      vec3f sample = {
+        (random(&state)%100)/100.f * 2.0 - 1.0, 
+        (random(&state)%100)/100.f * 2.0 - 1.0, 
+        (random(&state)%100)/100.f
+      };
+      sample = normalize(sample) * 0.02f;
+      sample = (random(&state)%100)/100.f*sample;
+      ssaoKernel[i] = sample;
+
+      vec3f p_ao = sample + p;
+      float samples_ao[128];
+      vkl_range1f ranges[128];
+
+      for (uniform int i=0; i<M; i++){
+      	  ranges[i]= vklGetValueRange(m->volume->vklVolume, i);
+      }
+   
+      vklComputeSampleMV(
+        m->volume->vklSampler, (const varying vkl_vec3f *uniform) & p_ao,
+	samples_ao, M, attributeIndices);
+	
+      int prev_val = (samples_ao[0] - ranges[0].lower) / (ranges[0].upper - ranges[0].lower) * 100.f;
+      int this_val = (samples_ao[1] - ranges[1].lower) / (ranges[1].upper - ranges[1].lower)* 100.f;
+      int idx = prev_val*100*4 + this_val*4;
+      float a = get_uint8(self->histMaskTexture, idx+3) / 255.f;
+      prev_val = (samples[0] - ranges[0].lower) / (ranges[0].upper - ranges[0].lower) * 100.f;
+      this_val = (samples[1] - ranges[1].lower) / (ranges[1].upper - ranges[1].lower)* 100.f;
+      idx = prev_val*100*4 + this_val*4;
+      float a_p = get_uint8(self->histMaskTexture, idx+3) / 255.f;
+      
+      if (a > 0.1) ao_scale = ao_scale + 1.f/sampleCnt;
+      gradient = gradient + (a_p - a)*sample/(sampleCnt + 0.f);
+     }
+     //float gradientLen = sqrt(dot(gradient, gradient));
+     gradient = normalize(gradient);
+     N = gradient;
+     NH = dot(N, H);
+     ao_scale = 0;
+     vc.sample.x = max(NH, 0)*vc.sample.x *(1-ao_scale);
+     vc.sample.y = max(NH, 0)*vc.sample.y *(1-ao_scale);
+     vc.sample.z = max(NH, 0)*vc.sample.z *(1-ao_scale);
+  }
+  
   // compute gradient shading lighting
   if (gsc > 0.0f) {
     vec3f ns = Volume_getGradient(m->volume, p);
