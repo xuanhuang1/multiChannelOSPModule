@@ -456,13 +456,13 @@ static void sampleVolume(MultivariantRenderContext &rc,
         vc.sample = blendWithDiffHue(samples, M, m, blendMode, self, attributeIndices, p);
   }
 
-  // Xuan: blinn shading, assume directional light (1,0,0)
+  // Xuan: blinn shading, assume directional light 
 
   vec3f ns = Volume_getGradient(m->volume, p);
-  {
+  if(1){
      vec3f N = normalize(ns);
      vec3f V = normalize(neg(vc.dir));
-     vec3f L = normalize(make_vec3f(10.f, -10.f, 20.f));
+     vec3f L = normalize(make_vec3f(0.f, -10.f, -10.f));
      vec3f H = normalize((L+V)/sqrt(dot((L+V), (L+V))));
      float NH = dot(N, H);
 
@@ -510,12 +510,15 @@ static void sampleVolume(MultivariantRenderContext &rc,
      }
      //float gradientLen = sqrt(dot(gradient, gradient));
      gradient = normalize(gradient);
-     N = gradient;
+     N = neg(gradient);
      NH = dot(N, H);
      ao_scale = 0;
      vc.sample.x = max(NH, 0)*vc.sample.x *(1-ao_scale);
      vc.sample.y = max(NH, 0)*vc.sample.y *(1-ao_scale);
      vc.sample.z = max(NH, 0)*vc.sample.z *(1-ao_scale);
+     //vc.sample.x = ns.x;
+     //vc.sample.y = ns.y;
+     //vc.sample.z = ns.z;
   }
   
   // compute gradient shading lighting
