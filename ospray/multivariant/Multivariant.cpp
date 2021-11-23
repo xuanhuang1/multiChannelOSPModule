@@ -31,8 +31,10 @@ void Multivariant::commit()
   renderAttributes = getParamDataT<int>("renderAttributes", false);
   renderAttributesWeights = getParamDataT<float>("renderAttributesWeights", false);
   histMaskTexture = getParamDataT<unsigned char>("histMaskTexture", false);
+  bbox = getParamDataT<float>("bbox", false);
   
   tfs = getParamDataT<TransferFunction *>("transferFunctions", false);
+  
   auto *distFunction = (TransferFunction *)getParamObject("distanceFunction", nullptr);
 
   if (distFunction == nullptr)
@@ -48,6 +50,8 @@ void Multivariant::commit()
 			 getParam<float>("volumeSamplingRate", 1.f),
 			 getParam<int>("blendMode", 0),
 			 getParam<int>("frontBackBlendMode", 0),
+			 getParam<int>("shadeMode", 0),
+			 ispc(bbox),
 			 ispc(renderAttributes),
 			 ispc(renderAttributesWeights),
 			 ispc(histMaskTexture),

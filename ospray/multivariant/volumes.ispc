@@ -329,30 +329,34 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	    //
 	    //
       	  if (i ==1){
-	  //float prev_weight = get_float(self->renderAttributesWeights, prev_i);
-	  //float this_weight = get_float(self->renderAttributesWeights, i);
-	  
-	  int prev_val = (samples[prev_i] - ranges[prev_i].lower) / (ranges[prev_i].upper - ranges[prev_i].lower) * 100.f;
-	  int this_val = (samples[i] - ranges[i].lower) / (ranges[i].upper - ranges[i].lower)* 100.f;
+	  float bbox[6] = {-1, 1, -1, 1, -1, 1};
+	  for ( int i=0; i<6; i++)
+	      bbox[i] = get_float(self->bbox, i);
 
-	  // modify here to sample texture for rgb value
-	  // use only alpha from the first channel
-	  // 2d index is [prev_val][this_val] col major texture image
-	  int idx = prev_val*100*4 + this_val*4;
+	  if ((p.x >= bbox[0]) && (p.x <= bbox[1]) &&
+	      (p.y >= bbox[2]) && (p.y <= bbox[3]) &&
+	      (p.z >= bbox[4]) && (p.z <= bbox[5])){
+	     int prev_val = (samples[prev_i] - ranges[prev_i].lower) / (ranges[prev_i].upper - ranges[prev_i].lower) * 100.f;
+	     int this_val = (samples[i] - ranges[i].lower) / (ranges[i].upper - ranges[i].lower)* 100.f;
 
-	  float r = get_uint8(self->histMaskTexture, idx) / 255.f;
-	  float g = get_uint8(self->histMaskTexture, idx+1) / 255.f;
-	  float b = get_uint8(self->histMaskTexture, idx+2) / 255.f;
-	  float a = get_uint8(self->histMaskTexture, idx+3) / 255.f;
+	     // modify here to sample texture for rgb value
+	     // use only alpha from the first channel
+	     // 2d index is [prev_val][this_val] col major texture image
+	     int idx = prev_val*100*4 + this_val*4;
 
-	  // black is reserved for invisible
-	  if ((r == 0) && (g ==0) && (b == 0))
-	  return make_vec4f(0,0,0,0);
+	     float r = get_uint8(self->histMaskTexture, idx) / 255.f;
+	     float g = get_uint8(self->histMaskTexture, idx+1) / 255.f;
+	     float b = get_uint8(self->histMaskTexture, idx+2) / 255.f;
+	     float a = get_uint8(self->histMaskTexture, idx+3) / 255.f;
 
-	  vec4f dist = (self->distFn->get(self->distFn, a));
-	  float w = dist.w;
-	  ret.x = r; ret.y = g; ret.z = b; ret.w = w;
+	     // black is reserved for invisible
+	     if ((r == 0) && (g ==0) && (b == 0))
+	     return make_vec4f(0,0,0,0);
 
+	     vec4f dist = (self->distFn->get(self->distFn, a));
+	     float w = dist.w;
+	     ret.x = r; ret.y = g; ret.z = b; ret.w = w;
+	     }
 	  }
       }
   }
@@ -459,7 +463,8 @@ static void sampleVolume(MultivariantRenderContext &rc,
   // Xuan: blinn shading, assume directional light 
 
   vec3f ns = Volume_getGradient(m->volume, p);
-  if(1){
+  bool shade = self->shadeMode;
+  if(shade && (self->blendMode == 5)){
      vec3f N = normalize(ns);
      vec3f V = normalize(neg(vc.dir));
      vec3f L = normalize(make_vec3f(0.f, -10.f, -10.f));
@@ -555,7 +560,9 @@ static void sampleVolume(MultivariantRenderContext &rc,
 
   // Weight the opacity with deltaT using Beer law
   // Xuan: adjusted here for a more opaque look
-  vc.sample.w = exp(-vc.sample.w * dt * m->densityScale * 100.f);
+  float scaleModifier = 1;
+  if (self->blendMode == 5) scaleModifier = 100;
+  vc.sample.w = exp(-vc.sample.w * dt * m->densityScale*scaleModifier);
 }
 
 static float sampleAllVolumes(MultivariantRenderContext &rc,

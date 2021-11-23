@@ -17,6 +17,7 @@ struct Multivariant : public Renderer
  private:
   bool visibleLights{false};
   bool scannedVisibleLightList{true};
+  Ref<const DataT<float> > bbox;
   Ref<const DataT<int> > renderAttributes;
   Ref<const DataT<float> > renderAttributesWeights;
   Ref<const DataT<uint8_t> > histMaskTexture; 

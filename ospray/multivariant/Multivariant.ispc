@@ -156,6 +156,8 @@ export void Multivariant_set(void *uniform _self,
     uniform float volumeSamplingRate,
     uniform int blendMode,
     uniform int frontBackBlendMode,
+    uniform int shadeMode,
+    const Data1D *uniform bbox,
     const Data1D *uniform renderAttributes,
     const Data1D *uniform renderAttributesWeights,
     const Data1D *uniform histMaskTexture,
@@ -172,6 +174,8 @@ export void Multivariant_set(void *uniform _self,
   self->volumeSamplingRate = volumeSamplingRate;
   self->blendMode = blendMode;
   self->frontBackBlendMode = frontBackBlendMode;
+  self->shadeMode = shadeMode;
+  self->bbox = *bbox;
   self->renderAttributes = *renderAttributes;
   self->renderAttributesWeights = *renderAttributesWeights;
   self->histMaskTexture = *histMaskTexture;

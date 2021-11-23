@@ -17,6 +17,8 @@ struct Multivariant
   float volumeSamplingRate;
   int blendMode;
   int frontBackBlendMode;
+  int shadeMode;
+  Data1D bbox;
   Data1D renderAttributes;
   Data1D renderAttributesWeights;
   Data1D histMaskTexture;

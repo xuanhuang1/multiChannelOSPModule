@@ -68,6 +68,9 @@ GLFWwindow *glfwWindow = nullptr;
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
 static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted", "user define histogram mask"};
 static const std::vector<std::string> frontBackStr = {"alpha blend"/*, "hue preserve", "highest value dominate"*/};
+
+static const std::vector<std::string> shadeModeStr = {"no shading", "shade"};
+
 static std::vector<std::string> attributeStr = {};
 
 class GLFWOSPWindow{
@@ -88,6 +91,9 @@ public:
   int tfnType = 1;
   int blendMode = 5;
   int frontBackBlendMode = 0;
+  int shadeMode = 0;
+
+  std::vector<float> clippingBox = {-1, 1, -1, 1, -1, 1};
   
   // the list of render attributes 
   std::vector<int> renderAttributesData;
@@ -209,6 +215,12 @@ bool renderAttributeUI_callback(void *, int index, const char **out_text)
   return true;
 }
 
+bool shadeModeUI_callback(void *, int index, const char **out_text)
+{
+  *out_text = shadeModeStr[index].c_str();
+  return true;
+}
+
 
 void GLFWOSPWindow::buildUI(){
   ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
@@ -217,7 +229,9 @@ void GLFWOSPWindow::buildUI(){
   static int whichtfnType = 1;
   static int whichBlendMode = 5;
   static int whichFrontBackBlendMode = 0;
+  static int whichShadeMode = 0;
   static float ratio = 0.5;
+  static float bbox[6] = {-1, 1, -1, 1, -1, 1};
   
   if (ImGui::Combo("tfn##whichtfnType",
 		   &whichtfnType,
@@ -239,15 +253,16 @@ void GLFWOSPWindow::buildUI(){
      renderer.commit();
   }
 
-    if (ImGui::Combo("frontBackBlendMode##whichFrontBackBlendMode",
+  if (ImGui::Combo("frontBackBlendMode##whichFrontBackBlendMode",
 		   &whichFrontBackBlendMode,
 		   frontBackBlendModeUI_callback,
 		   nullptr,
 		   frontBackStr.size())) {
-     frontBackBlendMode = whichFrontBackBlendMode;
-     renderer.setParam("frontBackBlendMode", frontBackBlendMode); 
-     renderer.commit();
-    }
+    frontBackBlendMode = whichFrontBackBlendMode;
+    renderer.setParam("frontBackBlendMode", frontBackBlendMode); 
+    renderer.commit();
+  }
+ 
   
     if (ImGui::TreeNode("Transfer Function Selection"))
     {
@@ -371,7 +386,17 @@ void GLFWOSPWindow::buildUI(){
     }
 
     if (ImGui::TreeNode("External Segmentation"))
-    {
+      {
+           
+	if (ImGui::Combo("shadeMode##whichShadeMode",
+			 &whichShadeMode,
+			 shadeModeUI_callback,
+			 nullptr,
+			 shadeModeStr.size())) {
+	  shadeMode = whichShadeMode;
+	  renderer.setParam("shadeMode", shadeMode); 
+	  renderer.commit();
+	}
       	// add histogram image 
 	ImVec2 p = ImGui::GetCursorScreenPos();
 	ImVec2 hImgSize(120, 120);
@@ -469,6 +494,26 @@ void GLFWOSPWindow::buildUI(){
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
+
+	bool bboxChanged = false;
+	
+	for (int i=0; i<6;i++){
+	  std::string txt = "";
+	  if (i < 2 ) txt += "x ";
+	  else if (i < 4 ) txt += "y ";
+	  else if (i < 6 ) txt += "z ";
+	  
+	  if (i % 2 == 0) txt += "min";
+	  else txt += "max";
+
+	  if (ImGui::SliderFloat(txt.c_str(), &clippingBox[i], -1.f, 1.f))
+	      bboxChanged = true;
+	}
+	if (bboxChanged){
+	  renderer.setParam("bbox", ospray::cpp::CopiedData(clippingBox));
+	  renderer.commit();
+	}
+	     
 	
 	if (ImGui::SliderFloat("scale opacity", &alpha_scaler, 0.000f, 10.000f)){
 	  for (int m =0; m <segHist.width*segHist.height; m++){
@@ -484,36 +529,40 @@ void GLFWOSPWindow::buildUI(){
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
-	
-	if (distFnWidget.changed()){
-	  std::vector<vec3f> tmpColors;
-	  std::vector<float> tmpOpacities;
-	  auto alphaOpacities = distFnWidget.get_alpha_control_pts();
-	  auto p0 = alphaOpacities[0];
-	  auto p1 = alphaOpacities[1];
-	  uint32_t current_interval_start = 0;
-	  uint32_t res = 255;
-	  for (uint32_t i=0;i<res;i++){
-	    if (i > alphaOpacities[current_interval_start+1].x*res)
-	      current_interval_start++;
-	    p0 = alphaOpacities[current_interval_start];
-	    p1 = alphaOpacities[current_interval_start+1];
-	    float current_x = i/float(res);
-	    float current_val = p0.y + (current_x - p0.x)/(p1.x - p0.x)*(p1.y - p0.y);
-	    tmpColors.push_back(vec3f(1,1,1));
-	    tmpOpacities.push_back(current_val);
-	  }
-	  distFnWidget.setUnchanged();
+
+	if (ImGui::TreeNode("distance function")){
+	  // distance function widget
+	  if (distFnWidget.changed()){
+	    std::vector<vec3f> tmpColors;
+	    std::vector<float> tmpOpacities;
+	    auto alphaOpacities = distFnWidget.get_alpha_control_pts();
+	    auto p0 = alphaOpacities[0];
+	    auto p1 = alphaOpacities[1];
+	    uint32_t current_interval_start = 0;
+	    uint32_t res = 255;
+	    for (uint32_t i=0;i<res;i++){
+	      if (i > alphaOpacities[current_interval_start+1].x*res)
+		current_interval_start++;
+	      p0 = alphaOpacities[current_interval_start];
+	      p1 = alphaOpacities[current_interval_start+1];
+	      float current_x = i/float(res);
+	      float current_val = p0.y + (current_x - p0.x)/(p1.x - p0.x)*(p1.y - p0.y);
+	      tmpColors.push_back(vec3f(1,1,1));
+	      tmpOpacities.push_back(current_val);
+	    }
+	    distFnWidget.setUnchanged();
 	  
-	  distFunc.setParam("color", ospray::cpp::CopiedData(tmpColors));
-	  distFunc.setParam("opacity", ospray::cpp::CopiedData(tmpOpacities));
-	  distFunc.commit();
-	  renderer.setParam("distanceFunction", distFunc);
-	  renderer.commit(); 
-	}
+	    distFunc.setParam("color", ospray::cpp::CopiedData(tmpColors));
+	    distFunc.setParam("opacity", ospray::cpp::CopiedData(tmpOpacities));
+	    distFunc.commit();
+	    renderer.setParam("distanceFunction", distFunc);
+	    renderer.commit(); 
+	  }
         
 
-	distFnWidget.draw_ui();
+	  distFnWidget.draw_ui();
+	  ImGui::TreePop();
+	}
 
 	ImGui::TreePop();
     }
@@ -890,6 +939,7 @@ int main(int argc, const char **argv)
     renderer->setParam("blendMode", glfwOspWindow.blendMode); // 0:add color 1: alpha blend
     renderer->setParam("renderAttributes", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesData));
     renderer->setParam("renderAttributesWeights", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesWeights));
+    renderer->setParam("bbox", ospray::cpp::CopiedData(glfwOspWindow.clippingBox));
 
     renderer->setParam("histMaskTexture", ospray::cpp::CopiedData(glfwOspWindow.segHist.image));
     
