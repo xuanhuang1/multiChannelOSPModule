@@ -44,7 +44,7 @@ class TransferFunctionWidget {
     size_t selected_colormap = 0;
     std::vector<uint8_t> current_colormap;
 
-    std::vector<vec2f> alpha_control_pts = {vec2f(0.f), vec2f(1.f)};
+  
     size_t selected_point = -1;
 
     bool clicked_on_item = false;
@@ -55,7 +55,7 @@ class TransferFunctionWidget {
 
 public:
     TransferFunctionWidget();
-
+  std::vector<vec2f> alpha_control_pts = {vec2f(0.f), vec2f(1.f)};
     // Add a colormap preset. The image should be a 1D RGBA8 image, if the image
     // is provided in sRGBA colorspace it will be linearized
     void add_colormap(const Colormap &map);

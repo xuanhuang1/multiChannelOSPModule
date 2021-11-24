@@ -55,6 +55,7 @@ void Multivariant::commit()
 			 ispc(renderAttributes),
 			 ispc(renderAttributesWeights),
 			 ispc(histMaskTexture),
+			 getParam<float>("intensityModifier", 1),
 			 getParam<int>("numAttributes", 0),
 			 getParam<int>("tfnType", 0),
 			 tfIEs.data(),

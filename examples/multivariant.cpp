@@ -493,6 +493,11 @@ void GLFWOSPWindow::buildUI(){
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
+	
+	if (ImGui::SliderFloat("scale overall opacity", &alpha_scaler, 1.000f, 20.000f)){
+	  renderer.setParam("intensityModifier", alpha_scaler);
+	  renderer.commit();
+	}
 
 	bool bboxChanged = false;
 	
@@ -511,27 +516,13 @@ void GLFWOSPWindow::buildUI(){
 	if (bboxChanged){
 	  renderer.setParam("bbox", ospray::cpp::CopiedData(clippingBox));
 	  renderer.commit();
-	}
-	     
+	}     
 	
-	if (ImGui::SliderFloat("scale opacity", &alpha_scaler, 0.000f, 10.000f)){
-	  for (int m =0; m <segHist.width*segHist.height; m++){
-	    bool color_equal = true;
-	    for (int i=0; i<3; i++){
-	      if(segHist.segImage[m*segHist.nChannels+i] != int(col1[i]*255))
-		color_equal = false;
-	    }
-	    if (color_equal)
-	       segHist.scaleAlphaForPixel(alpha_scaler, m*segHist.nChannels);
-	  }
-	  segHist.recreateImageTexture();
-	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
-	  renderer.commit();
-	}
 
 	if (ImGui::TreeNode("distance function")){
+	  bool button = ImGui::Button("set all 0"); 
 	  // distance function widget
-	  if (distFnWidget.changed()){
+	  if (distFnWidget.changed() || button){
 	    std::vector<vec3f> tmpColors;
 	    std::vector<float> tmpOpacities;
 	    auto alphaOpacities = distFnWidget.get_alpha_control_pts();
@@ -539,6 +530,10 @@ void GLFWOSPWindow::buildUI(){
 	    auto p1 = alphaOpacities[1];
 	    uint32_t current_interval_start = 0;
 	    uint32_t res = 255;
+	    if (button){
+	      for (uint32_t i=0;i<alphaOpacities.size();i++)
+		distFnWidget.alpha_control_pts[i].y = 0;
+	    }
 	    for (uint32_t i=0;i<res;i++){
 	      if (i > alphaOpacities[current_interval_start+1].x*res)
 		current_interval_start++;

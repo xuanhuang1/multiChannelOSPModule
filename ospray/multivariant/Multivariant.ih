@@ -22,6 +22,7 @@ struct Multivariant
   Data1D renderAttributes;
   Data1D renderAttributesWeights;
   Data1D histMaskTexture;
+  float intensityModifier;
   int numAttributes;
   int tfnType;
   TransferFunction** tfns;

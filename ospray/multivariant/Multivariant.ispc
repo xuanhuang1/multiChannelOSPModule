@@ -161,6 +161,7 @@ export void Multivariant_set(void *uniform _self,
     const Data1D *uniform renderAttributes,
     const Data1D *uniform renderAttributesWeights,
     const Data1D *uniform histMaskTexture,
+    uniform float intensityModifier,
     uniform int numAttributes,
     uniform int tfnType,
     void *uniform tfns,
@@ -179,6 +180,7 @@ export void Multivariant_set(void *uniform _self,
   self->renderAttributes = *renderAttributes;
   self->renderAttributesWeights = *renderAttributesWeights;
   self->histMaskTexture = *histMaskTexture;
+  self->intensityModifier = intensityModifier;
   self->numAttributes = numAttributes;
   self->tfnType = tfnType;
   self->tfns = (TransferFunction * *uniform) tfns;
