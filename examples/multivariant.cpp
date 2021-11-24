@@ -66,6 +66,9 @@ unsigned int guiTextureSize = 0;
 
 GLFWwindow *glfwWindow = nullptr;
 
+const char* imageNameString = "/home/xuanhuang/Desktop/_100_100_%d_segs.png";
+const char* distImageNameString = "/home/xuanhuang/Desktop/_100_100_%d_segs_dist.png";
+
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
 static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted", "user define histogram mask"};
 static const std::vector<std::string> frontBackStr = {"alpha blend"/*, "hue preserve", "highest value dominate"*/};
@@ -237,6 +240,7 @@ void GLFWOSPWindow::buildUI(){
   static int whichShadeMode = 0;
   static float ratio = 0.5;
   static float alpha_scaler;
+  static int num_of_seg = 4;
 	
   if (ImGui::Combo("tfn##whichtfnType",
 		   &whichtfnType,
@@ -397,7 +401,18 @@ void GLFWOSPWindow::buildUI(){
 
     if (ImGui::TreeNode("External Segmentation"))
       {
-           
+        if (ImGui::SliderInt("number of segments", &num_of_seg, 4, 8)){
+	  char filename[100];
+	  sprintf( filename, imageNameString, num_of_seg );
+	  segHist.loadImage(filename);
+	  sprintf( filename, distImageNameString, num_of_seg );
+	  segHist.loadDistImage(filename);
+	  segHist.applyDistAsAlpha();
+	  segHist.recreateImageTexture();
+	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	  renderer.commit();
+	  
+	}
 	if (ImGui::Combo("shadeMode##whichShadeMode",
 			 &whichShadeMode,
 			 shadeModeUI_callback,
@@ -965,9 +980,12 @@ int main(int argc, const char **argv)
     h.makeImage();
     h.createImageTexture();
     glfwOspWindow.histograms.push_back(h);
- 
-    glfwOspWindow.segHist.loadImage("/home/xuanhuang/Desktop/_100_100_8_segs.png");
-    glfwOspWindow.segHist.loadDistImage("/home/xuanhuang/Desktop/_100_100_8_segs_dist.png");
+
+    char filename[100];
+    sprintf( filename, imageNameString, 4);
+    glfwOspWindow.segHist.loadImage(filename);
+    sprintf( filename, distImageNameString, 4);
+    glfwOspWindow.segHist.loadDistImage(filename);
     glfwOspWindow.segHist.applyDistAsAlpha();
     glfwOspWindow.segHist.createImageTexture();
     glfwOspWindow.segHist.createDistImageTexture();
