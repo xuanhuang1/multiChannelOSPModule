@@ -17,6 +17,7 @@ add_executable(ospTutorial_mtvCpp
   imgui_impl_glfw_gl3.cpp
   TransferFunctionWidget.cpp
   Histogram.cpp
+  clipping_plane.cpp
   )
 
 target_link_libraries(ospTutorial_mtvCpp

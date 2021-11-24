@@ -31,7 +31,6 @@ void Multivariant::commit()
   renderAttributes = getParamDataT<int>("renderAttributes", false);
   renderAttributesWeights = getParamDataT<float>("renderAttributesWeights", false);
   histMaskTexture = getParamDataT<unsigned char>("histMaskTexture", false);
-  bbox = getParamDataT<float>("bbox", false);
   
   tfs = getParamDataT<TransferFunction *>("transferFunctions", false);
   
@@ -51,7 +50,6 @@ void Multivariant::commit()
 			 getParam<int>("blendMode", 0),
 			 getParam<int>("frontBackBlendMode", 0),
 			 getParam<int>("shadeMode", 0),
-			 ispc(bbox),
 			 ispc(renderAttributes),
 			 ispc(renderAttributesWeights),
 			 ispc(histMaskTexture),

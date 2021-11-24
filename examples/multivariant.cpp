@@ -33,10 +33,11 @@
 #include "ospray/ospray_cpp/ext/rkcommon.h"
 #include "rkcommon/utility/SaveImage.h"
 #include "ArcballCamera.h"
-
+#include "clipping_plane.h"
 #include "voxelGeneration.h"
 #include "TransferFunctionWidget.h"
 #include "Histogram.h"
+#include "app_params.h"
 
 // stl
 #include <random>
@@ -78,6 +79,7 @@ public:
   ospray::cpp::Camera camera{"perspective"};
   ospray::cpp::Renderer renderer{"multivariant"};
   ospray::cpp::World world;
+  ospray::cpp::Instance instance;
 
   bool leftDown = false;
   bool rightDown = false;
@@ -93,7 +95,10 @@ public:
   int frontBackBlendMode = 0;
   int shadeMode = 0;
 
-  std::vector<float> clippingBox = {-1, 1, -1, 1, -1, 1};
+  std::vector<float> clippingBox = {0,0,0,0,0,0};
+  std::array<ClippingPlane, 6> clipping_planes;
+  AppParam<std::array<ClippingPlaneParams, 6>> clipping_params;
+
   
   // the list of render attributes 
   std::vector<int> renderAttributesData;
@@ -231,7 +236,8 @@ void GLFWOSPWindow::buildUI(){
   static int whichFrontBackBlendMode = 0;
   static int whichShadeMode = 0;
   static float ratio = 0.5;
-  
+  static float alpha_scaler;
+	
   if (ImGui::Combo("tfn##whichtfnType",
 		   &whichtfnType,
 		   tfnTypeUI_callback,
@@ -262,7 +268,12 @@ void GLFWOSPWindow::buildUI(){
     renderer.commit();
   }
  
-  
+ 
+  if (ImGui::SliderFloat("scale overall opacity", &alpha_scaler, 1.000f, 20.000f)){
+    renderer.setParam("intensityModifier", alpha_scaler);
+    renderer.commit();
+  }
+	
     if (ImGui::TreeNode("Transfer Function Selection"))
     {
       bool renderAttributeChanged = false;
@@ -400,7 +411,7 @@ void GLFWOSPWindow::buildUI(){
 	ImVec2 p = ImGui::GetCursorScreenPos();
 	ImVec2 hImgSize(120, 120);
 	ImGui::Image((void*)(intptr_t)histograms[0].texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
-	ImGui::SameLine(p.x + hImgSize.x);
+	ImGui::SameLine(hImgSize.x + 50);
 	ImVec2 p2 = ImGui::GetCursorScreenPos();
 	ImGui::Image((void*)(intptr_t)segHist.segTexName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
 
@@ -419,7 +430,6 @@ void GLFWOSPWindow::buildUI(){
 	ImVec2 bbmax = ImGui::GetItemRectMax();
 	ImVec2 clipped_mouse_pos = ImVec2(std::min(std::max(io.MousePos.x, bbmin.x), bbmax.x),
 					  std::min(std::max(io.MousePos.y, bbmin.y), bbmax.y));
-	static float alpha_scaler;
 	static float col1[3];
 	static float col2[3];
 	static float colImage[3];
@@ -494,29 +504,49 @@ void GLFWOSPWindow::buildUI(){
 	  renderer.commit();
 	}
 	
-	if (ImGui::SliderFloat("scale overall opacity", &alpha_scaler, 1.000f, 20.000f)){
-	  renderer.setParam("intensityModifier", alpha_scaler);
-	  renderer.commit();
-	}
 
-	bool bboxChanged = false;
-	
-	for (int i=0; i<6;i++){
-	  std::string txt = "";
-	  if (i < 2 ) txt += "x ";
-	  else if (i < 4 ) txt += "y ";
-	  else if (i < 6 ) txt += "z ";
+        if (ImGui::TreeNode("clipping planes")){
+	  for (size_t i = 0; i < clipping_params.param.size(); ++i) {
+	    ImGui::PushID(i);
+	    ImGui::Separator();
+	    auto &plane = clipping_params.param[i];
+
+	    ImGui::Text("Clipping Plane on axis %d", plane.axis);
+	    clipping_params.changed |= ImGui::Checkbox("Enabled", &plane.enabled);
 	  
-	  if (i % 2 == 0) txt += "min";
-	  else txt += "max";
+	    if (ImGui::SliderFloat("Position",
+				   &clippingBox[i],
+				   -1, 1)) {
+	      plane.position[plane.axis] = -clippingBox[i];
+	      clipping_params.changed = true;
+	    }
 
-	  if (ImGui::SliderFloat(txt.c_str(), &clippingBox[i], -1.f, 1.f))
-	      bboxChanged = true;
+	    ImGui::PopID();
+	  }
+	  ImGui::TreePop();
 	}
-	if (bboxChanged){
-	  renderer.setParam("bbox", ospray::cpp::CopiedData(clippingBox));
-	  renderer.commit();
-	}     
+	
+	if (clipping_params.changed) {
+        clipping_params.changed = false;
+
+        for (size_t i = 0; i < clipping_params.param.size(); ++i) {
+            clipping_planes[i].update(clipping_params.param[i]);
+            clipping_planes[i].geom.commit();
+            clipping_planes[i].model.commit();
+            clipping_planes[i].group.commit();
+            clipping_planes[i].instance.commit();
+        }
+
+        std::vector<cpp::Instance> active_instances = {instance};
+        for (auto &p : clipping_planes) {
+            if (p.params.enabled) {
+                active_instances.push_back(p.instance);
+            }
+        }
+        world.setParam("instance", cpp::CopiedData(active_instances));
+        world.commit();
+    }
+
 	
 
 	if (ImGui::TreeNode("distance function")){
@@ -858,6 +888,23 @@ int main(int argc, const char **argv)
     for (const auto &v : voxels_read) {
       voxel_data.push_back(ospray::cpp::SharedData(v.data(), volumeDimensions));
     }
+    
+    glfwOspWindow.clipping_params = std::array<ClippingPlaneParams, 6>{ClippingPlaneParams(0, vec3f(0,0,0)), ClippingPlaneParams(0, vec3f(0,0,0)), ClippingPlaneParams(1, vec3f(0,0,0)), ClippingPlaneParams(1, vec3f(0,0,0)), ClippingPlaneParams(2, vec3f(0,0,0)), ClippingPlaneParams(2, vec3f(0,0,0))};
+    
+    glfwOspWindow.clipping_params.changed = false;
+    glfwOspWindow.clipping_planes = {
+        ClippingPlane(glfwOspWindow.clipping_params.param[0]),
+        ClippingPlane(glfwOspWindow.clipping_params.param[1]),
+        ClippingPlane(glfwOspWindow.clipping_params.param[2]),
+	ClippingPlane(glfwOspWindow.clipping_params.param[3]),
+        ClippingPlane(glfwOspWindow.clipping_params.param[4]),
+        ClippingPlane(glfwOspWindow.clipping_params.param[5]),
+    };
+    
+    for (int i=0; i<glfwOspWindow.clipping_params.param.size()/2; i++){
+      glfwOspWindow.clipping_params.param[i*2].flip_plane = true;
+    }
+
 
     
     ospray::cpp::Volume volume("structuredRegular");
@@ -877,12 +924,12 @@ int main(int argc, const char **argv)
     group.commit();
 
     // put the group into an instance (give the group a world transform)
-    ospray::cpp::Instance instance(group);
-    instance.commit();
+    glfwOspWindow.instance = ospray::cpp::Instance(group);
+    glfwOspWindow.instance.commit();
 
     // put the instance in the world
     //ospray::cpp::World world;
-    glfwOspWindow.world.setParam("instance", ospray::cpp::CopiedData(instance));
+    glfwOspWindow.world.setParam("instance", ospray::cpp::CopiedData(glfwOspWindow.instance));
 
     // create and setup light for Ambient Occlusion
     ospray::cpp::Light light("ambient");

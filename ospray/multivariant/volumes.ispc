@@ -330,13 +330,8 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	    //
       	  if (i ==1){
 
-	  float bbox[6] = {-1, 1, -1, 1, -1, 1};
-	  for ( int i=0; i<6; i++)
-	      bbox[i] = get_float(self->bbox, i);
 
-	  if ((p.x >= bbox[0]) && (p.x <= bbox[1]) &&
-	      (p.y >= bbox[2]) && (p.y <= bbox[3]) &&
-	      (p.z >= bbox[4]) && (p.z <= bbox[5])){
+	  if (true){
 	     int prev_val = (samples[prev_i] - ranges[prev_i].lower) / (ranges[prev_i].upper - ranges[prev_i].lower) * 100.f;
 	     int this_val = (samples[i] - ranges[i].lower) / (ranges[i].upper - ranges[i].lower)* 100.f;
 
