@@ -329,6 +329,7 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	    //
 	    //
       	  if (i ==1){
+
 	  float bbox[6] = {-1, 1, -1, 1, -1, 1};
 	  for ( int i=0; i<6; i++)
 	      bbox[i] = get_float(self->bbox, i);
@@ -561,7 +562,7 @@ static void sampleVolume(MultivariantRenderContext &rc,
   // Weight the opacity with deltaT using Beer law
   // Xuan: adjusted here for a more opaque look
   float scaleModifier = 1;
-  if (self->blendMode == 5) scaleModifier = 100;
+  //if (self->blendMode == 5) scaleModifier = 100;
   vc.sample.w = exp(-vc.sample.w * dt * m->densityScale*scaleModifier);
 }
 

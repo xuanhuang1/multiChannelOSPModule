@@ -231,7 +231,6 @@ void GLFWOSPWindow::buildUI(){
   static int whichFrontBackBlendMode = 0;
   static int whichShadeMode = 0;
   static float ratio = 0.5;
-  static float bbox[6] = {-1, 1, -1, 1, -1, 1};
   
   if (ImGui::Combo("tfn##whichtfnType",
 		   &whichtfnType,
