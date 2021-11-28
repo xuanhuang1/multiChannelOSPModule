@@ -27,7 +27,6 @@
 #endif
 
 #include <fstream>
-//#include <vector>
 
 #include "ospray/ospray_cpp.h"
 #include "ospray/ospray_cpp/ext/rkcommon.h"
@@ -44,6 +43,9 @@
 #include <vector>
 #include <string>
 #include <deque>
+#include <ctime>
+#include <ratio>
+#include <chrono>
 
 #define GLFW_INCLUDE_NONE
 #include <GL/glew.h>
@@ -72,8 +74,10 @@ const char* distImageNameString = "/home/xuanhuang/Desktop/_100_100_%d_segs_dist
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
 static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted", "user define histogram mask"};
 static const std::vector<std::string> frontBackStr = {"alpha blend"/*, "hue preserve", "highest value dominate"*/};
-
 static const std::vector<std::string> shadeModeStr = {"no shading", "shade"};
+static const std::vector<std::string> segmentRenderModeStr = {"region", "boundary"};
+
+
 
 static std::vector<std::string> attributeStr = {};
 
@@ -97,7 +101,8 @@ public:
   int blendMode = 5;
   int frontBackBlendMode = 0;
   int shadeMode = 0;
-
+  int segmentRenderMode = 0;
+  
   std::vector<float> clippingBox = {0,0,0,0,0,0};
   std::array<ClippingPlane, 6> clipping_planes;
   AppParam<std::array<ClippingPlaneParams, 6>> clipping_params;
@@ -229,17 +234,23 @@ bool shadeModeUI_callback(void *, int index, const char **out_text)
   return true;
 }
 
+bool segmentRenderModeUI_callback(void *, int index, const char **out_text)
+{
+  *out_text = segmentRenderModeStr[index].c_str();
+  return true;
+}
 
 void GLFWOSPWindow::buildUI(){
   ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize;
-  ImGui::Begin("Another Window", nullptr, flags);
+  ImGui::Begin("Menu Window", nullptr, flags);
   ImGui::Text("Hello from another window!");
   static int whichtfnType = 1;
   static int whichBlendMode = 5;
   static int whichFrontBackBlendMode = 0;
   static int whichShadeMode = 0;
+  static int whichSegmentRenderMode = 0;
   static float ratio = 0.5;
-  static float alpha_scaler;
+  static float alpha_scaler = 1;
   static int num_of_seg = 4;
 	
   if (ImGui::Combo("tfn##whichtfnType",
@@ -273,12 +284,57 @@ void GLFWOSPWindow::buildUI(){
   }
  
  
-  if (ImGui::SliderFloat("scale overall opacity", &alpha_scaler, 1.000f, 20.000f)){
+  if (ImGui::SliderFloat("scale overall opacity", &alpha_scaler, 1.000f, 50.000f)){
     renderer.setParam("intensityModifier", alpha_scaler);
     renderer.commit();
   }
+  if (ImGui::TreeNode("clipping planes")){
+    for (size_t i = 0; i < clipping_params.param.size(); ++i) {
+      ImGui::PushID(i);
+      ImGui::Separator();
+      auto &plane = clipping_params.param[i];
+
+      ImGui::Text("Clipping Plane on axis %d", plane.axis);
+      clipping_params.changed |= ImGui::Checkbox("Enabled", &plane.enabled);
+	  
+      if (ImGui::SliderFloat("Position",
+			     &clippingBox[i],
+			     -1, 1)) {
+	plane.position[plane.axis] = -clippingBox[i];
+	clipping_params.changed = true;
+      }
+
+      ImGui::PopID();
+    }
+    ImGui::TreePop();
+  }
 	
-    if (ImGui::TreeNode("Transfer Function Selection"))
+  if (clipping_params.changed) {
+    clipping_params.changed = false;
+
+    for (size_t i = 0; i < clipping_params.param.size(); ++i) {
+      clipping_planes[i].update(clipping_params.param[i]);
+      clipping_planes[i].geom.commit();
+      clipping_planes[i].model.commit();
+      clipping_planes[i].group.commit();
+      clipping_planes[i].instance.commit();
+    }
+
+    std::vector<cpp::Instance> active_instances = {instance};
+    for (auto &p : clipping_planes) {
+      if (p.params.enabled) {
+	active_instances.push_back(p.instance);
+      }
+    }
+    world.setParam("instance", cpp::CopiedData(active_instances));
+    world.commit();
+  }
+
+  ImGui::Separator();
+  ImGui::Text("Blend Mode Advance Settings");
+  
+  if ( blendMode < 4 ){ // add, alpha blend, hue preserve or hihest value dominate blend mode
+    if (ImGui::TreeNode("Transfer Function Selection")) 
     {
       bool renderAttributeChanged = false;
       bool tfnsChanged = false;
@@ -351,7 +407,9 @@ void GLFWOSPWindow::buildUI(){
       
       ImGui::TreePop();
     }
-
+  }      
+      
+  if (blendMode == 4){
     if (ImGui::TreeNode("Histogram Selection"))
     {
       for (uint32_t n = 0; n < histograms.size(); n++){
@@ -398,7 +456,9 @@ void GLFWOSPWindow::buildUI(){
       }
       ImGui::TreePop();
     }
-
+  }
+  
+  if (blendMode == 5){
     if (ImGui::TreeNode("External Segmentation"))
       {
         if (ImGui::SliderInt("number of segments", &num_of_seg, 4, 8)){
@@ -422,6 +482,17 @@ void GLFWOSPWindow::buildUI(){
 	  renderer.setParam("shadeMode", shadeMode); 
 	  renderer.commit();
 	}
+		
+	if (ImGui::Combo("segmentRenderMode##whichSegmentRenderMode",
+			 &whichSegmentRenderMode,
+			 segmentRenderModeUI_callback,
+			 nullptr,
+			 segmentRenderModeStr.size())) {
+	  segmentRenderMode  = whichSegmentRenderMode;
+	  renderer.setParam("segmentRenderMode", segmentRenderMode); 
+	  renderer.commit();
+	}
+	
       	// add histogram image 
 	ImVec2 p = ImGui::GetCursorScreenPos();
 	ImVec2 hImgSize(120, 120);
@@ -519,49 +590,6 @@ void GLFWOSPWindow::buildUI(){
 	  renderer.commit();
 	}
 	
-
-        if (ImGui::TreeNode("clipping planes")){
-	  for (size_t i = 0; i < clipping_params.param.size(); ++i) {
-	    ImGui::PushID(i);
-	    ImGui::Separator();
-	    auto &plane = clipping_params.param[i];
-
-	    ImGui::Text("Clipping Plane on axis %d", plane.axis);
-	    clipping_params.changed |= ImGui::Checkbox("Enabled", &plane.enabled);
-	  
-	    if (ImGui::SliderFloat("Position",
-				   &clippingBox[i],
-				   -1, 1)) {
-	      plane.position[plane.axis] = -clippingBox[i];
-	      clipping_params.changed = true;
-	    }
-
-	    ImGui::PopID();
-	  }
-	  ImGui::TreePop();
-	}
-	
-	if (clipping_params.changed) {
-        clipping_params.changed = false;
-
-        for (size_t i = 0; i < clipping_params.param.size(); ++i) {
-            clipping_planes[i].update(clipping_params.param[i]);
-            clipping_planes[i].geom.commit();
-            clipping_planes[i].model.commit();
-            clipping_planes[i].group.commit();
-            clipping_planes[i].instance.commit();
-        }
-
-        std::vector<cpp::Instance> active_instances = {instance};
-        for (auto &p : clipping_planes) {
-            if (p.params.enabled) {
-                active_instances.push_back(p.instance);
-            }
-        }
-        world.setParam("instance", cpp::CopiedData(active_instances));
-        world.commit();
-    }
-
 	
 
 	if (ImGui::TreeNode("distance function")){
@@ -605,6 +633,7 @@ void GLFWOSPWindow::buildUI(){
 
 	ImGui::TreePop();
     }
+  }
  
   ImGui::End();
 
@@ -822,7 +851,7 @@ int main(int argc, const char **argv)
 
     glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
     // create GLFW window
-    glfwWindow = glfwCreateWindow(windowSize.x, windowSize.y, "Multichannel viewer", nullptr, nullptr);
+    glfwWindow = glfwCreateWindow(windowSize.x, windowSize.y, "Multimodal Viewer", nullptr, nullptr);
 
     if (!glfwWindow) {
       glfwTerminate();
@@ -903,7 +932,8 @@ int main(int argc, const char **argv)
     for (const auto &v : voxels_read) {
       voxel_data.push_back(ospray::cpp::SharedData(v.data(), volumeDimensions));
     }
-    
+
+    // clipping plane geometry
     glfwOspWindow.clipping_params = std::array<ClippingPlaneParams, 6>{ClippingPlaneParams(0, vec3f(0,0,0)), ClippingPlaneParams(0, vec3f(0,0,0)), ClippingPlaneParams(1, vec3f(0,0,0)), ClippingPlaneParams(1, vec3f(0,0,0)), ClippingPlaneParams(2, vec3f(0,0,0)), ClippingPlaneParams(2, vec3f(0,0,0))};
     
     glfwOspWindow.clipping_params.changed = false;
@@ -920,8 +950,39 @@ int main(int argc, const char **argv)
       glfwOspWindow.clipping_params.param[i*2].flip_plane = true;
     }
 
+    // mesh geometry
+    std::vector<vec3f> mesh_vertex = {vec3f(-1.0f, -1.0f, 0.0f),
+				      vec3f(-1.0f, 1.0f, 0.0f),
+				      vec3f(1.0f, -1.0f, 0.0f),
+				      vec3f(0.0f, 0.0f, 1.0f)};
+    std::vector<vec3f> mesh_normal = {vec3f(0.0f, 0.0f, 1.0f),
+				      vec3f(0.0f, 0.0f, 1.0f),
+				      vec3f(0.0f, 0.0f, 1.0f),
+				      vec3f(-1.0f, -1.0f, 0.0f)};
+     std::vector<vec4f> color = {vec4f(0.9f, 0.5f, 0.5f, 1.0f),
+				 vec4f(0.8f, 0.8f, 0.8f, 1.0f),
+				 vec4f(0.8f, 0.8f, 0.8f, 1.0f),
+				 vec4f(0.5f, 0.9f, 0.5f, 1.0f)};
+   std::vector<vec3ui> index = {vec3ui(0, 1, 2), vec3ui(1, 2, 3)};
+
+   // create and setup model and mesh
+    ospray::cpp::Geometry mesh("mesh");
+    mesh.setParam("vertex.position", ospray::cpp::CopiedData(mesh_vertex));
+    mesh.setParam("vertex.normal", ospray::cpp::CopiedData(mesh_normal));
+    mesh.setParam("vertex.color", ospray::cpp::CopiedData(color));
+    mesh.setParam("index", ospray::cpp::CopiedData(index));
+    //mesh.commit();
+
+    // put the mesh into a model
+    //ospray::cpp::GeometricModel mesh_model(mesh);
+    //mesh_model.commit();
+
+    // put the model into a group (collection of models)
+    //ospray::cpp::Group group;
+    //group.setParam("geometry", ospray::cpp::CopiedData(mesh_model));
 
     
+    // volume
     ospray::cpp::Volume volume("structuredRegular");
     volume.setParam("gridOrigin", vec3f(-1.f));
     volume.setParam("gridSpacing", vec3f(2.f / reduce_max(volumeDimensions)));
@@ -943,7 +1004,7 @@ int main(int argc, const char **argv)
     glfwOspWindow.instance.commit();
 
     // put the instance in the world
-    //ospray::cpp::World world;
+    ospray::cpp::World world;
     glfwOspWindow.world.setParam("instance", ospray::cpp::CopiedData(glfwOspWindow.instance));
 
     // create and setup light for Ambient Occlusion
@@ -981,7 +1042,7 @@ int main(int argc, const char **argv)
     h.createImageTexture();
     glfwOspWindow.histograms.push_back(h);
 
-    char filename[100];
+    char filename[256];
     sprintf( filename, imageNameString, 4);
     glfwOspWindow.segHist.loadImage(filename);
     sprintf( filename, distImageNameString, 4);
@@ -993,7 +1054,7 @@ int main(int argc, const char **argv)
 
     
     // complete setup of renderer
-    renderer->setParam("aoSamples", 1);
+    renderer->setParam("aoSamples", 10);
     renderer->setParam("backgroundColor", 0.f); // white, transparent
     renderer->setParam("blendMode", glfwOspWindow.blendMode); // 0:add color 1: alpha blend
     renderer->setParam("renderAttributes", ospray::cpp::CopiedData(glfwOspWindow.renderAttributesData));
@@ -1022,7 +1083,6 @@ int main(int argc, const char **argv)
     camera->setParam("up", glfwOspWindow.arcballCamera->upDir());
     camera->commit(); // commit each object to indicate modifications are done
 
-    
     glfwOspWindow.renderNewFrame();
 
 
@@ -1035,13 +1095,13 @@ int main(int argc, const char **argv)
     glfwOspWindow.framebuffer.unmap(fb);
     glfwOspWindow.setFunc();
     glfwOspWindow.reshape(windowSize.x, windowSize.y);
-
-    
     glfwSetInputMode(glfwWindow, GLFW_STICKY_KEYS, GL_TRUE);
 
-    
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto t2 = std::chrono::high_resolution_clock::now();
+
     do{
-      
+      t1 = std::chrono::high_resolution_clock::now();
       
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
       glEnable(GL_TEXTURE_2D);
@@ -1059,22 +1119,23 @@ int main(int argc, const char **argv)
       ImGui_ImplGlfwGL3_Render();
 
       //glfwOspWindow.segHist.recreateImageTexture();
-      glBindTexture(GL_TEXTURE_2D, glfwOspWindow.segHist.segTexName);
-      glBegin(GL_QUADS);
-      glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
-      glTexCoord2f(1.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
-      glTexCoord2f(1.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
-      glTexCoord2f(0.0, 1.0); glVertex3f(0.0, 100.0, 0.0);
-      glEnd();
+      if (0){
+	glBindTexture(GL_TEXTURE_2D, glfwOspWindow.segHist.segTexName);
+	glBegin(GL_QUADS);
+	glTexCoord2f(0.0, 0.0); glVertex3f(0.0, 0.0, 0.0);
+	glTexCoord2f(1.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
+	glTexCoord2f(1.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
+	glTexCoord2f(0.0, 1.0); glVertex3f(0.0, 100.0, 0.0);
+	glEnd();
 
-      glBindTexture(GL_TEXTURE_2D, glfwOspWindow.segHist.distTexName);
-      glBegin(GL_QUADS);
-      glTexCoord2f(0.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
-      glTexCoord2f(1.0, 0.0); glVertex3f(200.0, 0.0, 0.0);
-      glTexCoord2f(1.0, 1.0); glVertex3f(200.0, 100.0, 0.0);
-      glTexCoord2f(0.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
-      glEnd();
-
+	glBindTexture(GL_TEXTURE_2D, glfwOspWindow.segHist.distTexName);
+	glBegin(GL_QUADS);
+	glTexCoord2f(0.0, 0.0); glVertex3f(100.0, 0.0, 0.0);
+	glTexCoord2f(1.0, 0.0); glVertex3f(200.0, 0.0, 0.0);
+	glTexCoord2f(1.0, 1.0); glVertex3f(200.0, 100.0, 0.0);
+	glTexCoord2f(0.0, 1.0); glVertex3f(100.0, 100.0, 0.0);
+	glEnd();
+      }
       
       
       glDisable(GL_TEXTURE_2D);
@@ -1082,6 +1143,10 @@ int main(int argc, const char **argv)
       glfwSwapBuffers(glfwWindow);
       
       glfwPollEvents();
+
+      t2 = std::chrono::high_resolution_clock::now();
+      auto time_span = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
+      glfwSetWindowTitle(glfwWindow, (std::string("Multimodal Render FPS:")+std::to_string(int(1.f / time_span.count()))).c_str());
 
     } // Check if the ESC key was pressed or the window was closed
     while( glfwGetKey(glfwWindow, GLFW_KEY_ESCAPE ) != GLFW_PRESS &&

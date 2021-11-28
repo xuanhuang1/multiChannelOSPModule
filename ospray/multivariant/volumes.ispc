@@ -345,6 +345,11 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	     float b = get_uint8(self->histMaskTexture, idx+2) / 255.f;
 	     float a = get_uint8(self->histMaskTexture, idx+3) / 255.f;
 
+	     
+	     if ((M > 2) && (self->segmentRenderMode == 1)){
+	     	float gradient = (samples[2] - ranges[2].lower) / (ranges[2].upper - ranges[2].lower);
+	     	a = a * abs(gradient*gradient *10);
+	     }
 	     // black is reserved for invisible
 	     if ((r == 0) && (g ==0) && (b == 0))
 	     return make_vec4f(0,0,0,0);

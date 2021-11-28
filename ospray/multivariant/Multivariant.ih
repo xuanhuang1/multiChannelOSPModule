@@ -18,6 +18,7 @@ struct Multivariant
   int blendMode;
   int frontBackBlendMode;
   int shadeMode;
+  int segmentRenderMode;
   Data1D renderAttributes;
   Data1D renderAttributesWeights;
   Data1D histMaskTexture;

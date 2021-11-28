@@ -50,6 +50,7 @@ void Multivariant::commit()
 			 getParam<int>("blendMode", 0),
 			 getParam<int>("frontBackBlendMode", 0),
 			 getParam<int>("shadeMode", 0),
+			 getParam<int>("segmentRenderMode", 0),
 			 ispc(renderAttributes),
 			 ispc(renderAttributesWeights),
 			 ispc(histMaskTexture),
