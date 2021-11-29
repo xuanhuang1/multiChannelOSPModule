@@ -467,7 +467,7 @@ void GLFWOSPWindow::buildUI(){
   if (blendMode == 5){
     if (ImGui::TreeNode("External Segmentation"))
       {
-        if (ImGui::SliderInt("number of segments", &num_of_seg, 4, 8)){
+        if (ImGui::SliderInt("number of segments", &num_of_seg, 4, 14)){
 	  char filename[400];
 	  sprintf( filename, imageNameString, num_of_seg );
 	  segHist.loadImage(filename);
