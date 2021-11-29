@@ -68,8 +68,15 @@ unsigned int guiTextureSize = 0;
 
 GLFWwindow *glfwWindow = nullptr;
 
-const char* imageNameString = "/home/xuanhuang/Desktop/_100_100_%d_segs.png";
-const char* distImageNameString = "/home/xuanhuang/Desktop/_100_100_%d_segs_dist.png";
+const char *imageNameString = "/home/xuanhuang/Desktop/_100_100_%d_segs.png";
+const char *distImageNameString =
+    "/home/xuanhuang/Desktop/_100_100_%d_segs_dist.png";
+
+//const char *imageNameString =
+//    "C:/Users/miao1/Development/histogram_analysis_multifield/data/jh2ltt/EuroVisData/fullres/_100_100_%d_segs.png";
+//const char *distImageNameString =
+//    "C:/Users/miao1/Development/histogram_analysis_multifield/data/jh2ltt/EuroVisData/fullres/_100_100_%d_segs_dist.png";
+
 
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
 static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted", "user define histogram mask"};
@@ -106,7 +113,6 @@ public:
   std::vector<float> clippingBox = {0,0,0,0,0,0};
   std::array<ClippingPlane, 6> clipping_planes;
   AppParam<std::array<ClippingPlaneParams, 6>> clipping_params;
-
   
   // the list of render attributes 
   std::vector<int> renderAttributesData;
@@ -462,7 +468,7 @@ void GLFWOSPWindow::buildUI(){
     if (ImGui::TreeNode("External Segmentation"))
       {
         if (ImGui::SliderInt("number of segments", &num_of_seg, 4, 8)){
-	  char filename[100];
+	  char filename[400];
 	  sprintf( filename, imageNameString, num_of_seg );
 	  segHist.loadImage(filename);
 	  sprintf( filename, distImageNameString, num_of_seg );
@@ -934,7 +940,20 @@ int main(int argc, const char **argv)
     }
 
     // clipping plane geometry
-    glfwOspWindow.clipping_params = std::array<ClippingPlaneParams, 6>{ClippingPlaneParams(0, vec3f(0,0,0)), ClippingPlaneParams(0, vec3f(0,0,0)), ClippingPlaneParams(1, vec3f(0,0,0)), ClippingPlaneParams(1, vec3f(0,0,0)), ClippingPlaneParams(2, vec3f(0,0,0)), ClippingPlaneParams(2, vec3f(0,0,0))};
+    //glfwOspWindow.clipping_params = std::array<ClippingPlaneParams, 6>{
+    //    ClippingPlaneParams(0, vec3f(0, 0, 0)),
+    //    ClippingPlaneParams(0, vec3f(0, 0, 0)),
+    //    ClippingPlaneParams(1, vec3f(0, 0, 0)),
+    //    ClippingPlaneParams(1, vec3f(0, 0, 0)),
+    //    ClippingPlaneParams(2, vec3f(0, 0, 0)),
+    //    ClippingPlaneParams(2, vec3f(0, 0, 0))};
+    glfwOspWindow.clipping_params = std::array<ClippingPlaneParams, 6>{
+        ClippingPlaneParams(0, vec3f(0.48, 0, 0)),
+        ClippingPlaneParams(0, vec3f(-0.48, 0, 0)),
+        ClippingPlaneParams(1, vec3f(0, 0.26, 0)),
+        ClippingPlaneParams(1, vec3f(0, -0.26, 0)),
+        ClippingPlaneParams(2, vec3f(0, 0, 0.49)),
+        ClippingPlaneParams(2, vec3f(0, 0, -0.54))};
     
     glfwOspWindow.clipping_params.changed = false;
     glfwOspWindow.clipping_planes = {
