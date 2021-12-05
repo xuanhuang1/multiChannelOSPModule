@@ -72,12 +72,6 @@ const char *imageNameString = "/home/xuanhuang/Desktop/_100_100_%d_segs.png";
 const char *distImageNameString =
     "/home/xuanhuang/Desktop/_100_100_%d_segs_dist.png";
 
-//const char *imageNameString =
-//    "C:/Users/miao1/Development/histogram_analysis_multifield/data/jh2ltt/EuroVisData/fullres/_100_100_%d_segs.png";
-//const char *distImageNameString =
-//    "C:/Users/miao1/Development/histogram_analysis_multifield/data/jh2ltt/EuroVisData/fullres/_100_100_%d_segs_dist.png";
-
-
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
 static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted", "user define histogram mask"};
 static const std::vector<std::string> frontBackStr = {"alpha blend"/*, "hue preserve", "highest value dominate"*/};
@@ -510,9 +504,13 @@ void GLFWOSPWindow::buildUI(){
 
 	const ImGuiIO &io = ImGui::GetIO();
 	bool clicked_on_item = false;
-
+	bool right_click = false;
+	bool left_click = false;
+	
 	if (ImGui::IsItemHovered() && (io.MouseDown[0] || io.MouseDown[1])) {
 	  clicked_on_item = true;
+	  if (io.MouseDown[1]) right_click = true;
+	  if (io.MouseDown[0]) left_click = true;
 	}
 
 	const vec2f view_offset(p2.x, p.y);
@@ -522,9 +520,20 @@ void GLFWOSPWindow::buildUI(){
 	ImVec2 bbmax = ImGui::GetItemRectMax();
 	ImVec2 clipped_mouse_pos = ImVec2(std::min(std::max(io.MousePos.x, bbmin.x), bbmax.x),
 					  std::min(std::max(io.MousePos.y, bbmin.y), bbmax.y));
-	static float col1[3];
-	static float col2[3];
+	static float colSegImage[3];
+	static float colActive[3];
 	static float colImage[3];
+	static float colFocus[3];
+	static bool focusEnable;
+
+	if (ImGui::Checkbox("right click focus mode enable", &focusEnable)){
+	  if (!focusEnable){
+	    segHist.applyDistAsAlpha();
+	    segHist.recreateImageTexture();
+	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	    renderer.commit();
+	  }
+	}
 	
 	if (clicked_on_item) {
 	  vec2f mouse_pos = (vec2f(clipped_mouse_pos.x, clipped_mouse_pos.y) - view_offset) / view_scale * vec2f(segHist.width, segHist.height);
@@ -536,35 +545,65 @@ void GLFWOSPWindow::buildUI(){
 		    << int(segHist.image[color_index + 1])<<" "
 		    << int(segHist.image[color_index + 2])<<" )"
 		    <<"\n";*/
-	  col1[0] = int(segHist.segImage[color_index + 0])/255.f;
-	  col1[1] = int(segHist.segImage[color_index + 1])/255.f;
-	  col1[2] = int(segHist.segImage[color_index + 2])/255.f;
+	  colSegImage[0] = int(segHist.segImage[color_index + 0])/255.f;
+	  colSegImage[1] = int(segHist.segImage[color_index + 1])/255.f;
+	  colSegImage[2] = int(segHist.segImage[color_index + 2])/255.f;
 	  
 	  colImage[0] = int(segHist.image[color_index + 0])/255.f;
 	  colImage[1] = int(segHist.image[color_index + 1])/255.f;
 	  colImage[2] = int(segHist.image[color_index + 2])/255.f;
-  	  for (int i=0; i<3; i++)
-	    col2[i] = col1[i];
+
+	  for (int i=0; i<3; i++)
+	    colActive[i] = colSegImage[i];
+	  
+	  if (right_click && focusEnable){
+	    if( (colFocus[0] != colActive[0]) ||
+		(colFocus[1] != colActive[1]) ||
+		(colFocus[2] != colActive[2])) {
+	      for (int m =0; m <segHist.width*segHist.height; m++){
+		bool color_equal = true;
+		int color_index = m*segHist.nChannels;
+		for (int i=0; i<3; i++){
+		  if(segHist.segImage[color_index+i] != int(colActive[i]*255)){
+		    color_equal = false;
+		  }
+		}
+		if (color_equal){
+		  segHist.image[color_index+3] = 255;
+		}else{
+		  segHist.image[color_index+3] = 0;
+		}
+	      }
+	      std::cout <<"one\n";
+	      for (int i=0; i<3; i++)
+		colFocus[i] = colActive[i];
+	    }
+	    	  
+	    segHist.recreateImageTexture();
+	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	    renderer.commit();
+	  }
+	  
 	}
 	
-	if(ImGui::ColorEdit3("color 1", col1)){
+	if(ImGui::ColorEdit3("color 1", colSegImage)){
 	  for (int m =0; m <segHist.width*segHist.height; m++){
 	    bool color_equal = true;
 	    for (int i=0; i<3; i++){
-	      if(segHist.segImage[m*segHist.nChannels+i] != int(col2[i]*255)){
+	      if(segHist.segImage[m*segHist.nChannels+i] != int(colActive[i]*255)){
 		color_equal = false;
 	      }
 	    }
 	    if (color_equal){
 	      for (int i=0; i<3; i++){
-		segHist.segImage[m*segHist.nChannels+i] = int(col1[i]*255);
-		segHist.image[m*segHist.nChannels+i] = int(col1[i]*255);
+		segHist.segImage[m*segHist.nChannels+i] = int(colSegImage[i]*255);
+		segHist.image[m*segHist.nChannels+i] = int(colSegImage[i]*255);
 		colImage[i] = int(segHist.image[m*segHist.nChannels+i])/255.f;
 	      }
 	    }
 	  }
 	  for (int i=0; i<3; i++)
-	    col2[i] = col1[i];
+	    colActive[i] = colSegImage[i];
 	  
 	  segHist.recreateImageTexture();
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
@@ -579,16 +618,16 @@ void GLFWOSPWindow::buildUI(){
 	if(ImGui::Checkbox("set invisible", &invisible)){
 	  if(invisible){
 	    // set from visible to invisible
-	    unsigned int currentCol[3] = {col1[0]*255, col1[1]*255, col1[2]*255};
+	    unsigned int currentCol[3] = {colSegImage[0]*255, colSegImage[1]*255, colSegImage[2]*255};
 	    unsigned int toCol[3] = {0 ,0, 0};
 	    segHist.setOutputImageFromSegImage(currentCol, toCol);
 	    for (int i=0; i<3; i++)
 	      colImage[i] = 0.f;
 	  }else{
-	    unsigned int currentCol[3] = {col1[0]*255, col1[1]*255, col1[2]*255};
+	    unsigned int currentCol[3] = {colSegImage[0]*255, colSegImage[1]*255, colSegImage[2]*255};
 	    segHist.setOutputImageFromSegImage(currentCol, currentCol);
 	    for (int i=0; i<3; i++)
-	      colImage[i] = col1[i];
+	      colImage[i] = colSegImage[i];
 	  }
 
 	  segHist.recreateImageTexture();
