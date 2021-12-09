@@ -55,7 +55,7 @@ public:
   void setOutputImageFromSegImage(unsigned int from[3], unsigned int to[3]);
 
   int getColorSegID(unsigned int col[3]){
-    std::vector<int> color = {col[0], col[1], col[2]};
+    std::vector<int> color = {int(col[0]), int(col[1]), int(col[2])};
     if (colorSegIDMap.find(color) != colorSegIDMap.end() ) return colorSegIDMap[color];
     return -1;
   }
