@@ -26,7 +26,8 @@ struct Multivariant
   int numAttributes;
   int tfnType;
   TransferFunction** tfns;
-  TransferFunction*  distFn;
+  TransferFunction**  distFns;
+  Data1D segColWithAlphaModifier;
 };
 
 struct MultivariantRenderContext

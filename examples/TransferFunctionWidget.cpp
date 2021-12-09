@@ -116,7 +116,7 @@ void TransferFunctionWidget::draw_ui()
     ImGui::TextWrapped(
         "Left click to add a point, right click remove. "
         "Left click + drag to move points.");
-    update_colormap();
+    //update_colormap();
     /*if (ImGui::BeginCombo(guiText.c_str(), colormaps[selected_colormap].name.c_str())) {
         for (size_t i = 0; i < colormaps.size(); ++i) {
             if (ImGui::Selectable(colormaps[i].name.c_str(), selected_colormap == i)) {
@@ -161,6 +161,7 @@ void TransferFunctionWidget::draw_ui()
                                       std::min(std::max(io.MousePos.y, bbmin.y), bbmax.y));
 
     if (clicked_on_item) {
+      colormap_changed = true;
         vec2f mouse_pos = (vec2f(clipped_mouse_pos) - view_offset) / view_scale;
         mouse_pos.x = clamp(mouse_pos.x, 0.f, 1.f);
         mouse_pos.y = clamp(mouse_pos.y, 0.f, 1.f);
@@ -303,7 +304,7 @@ void TransferFunctionWidget::update_gpu_image()
 
 void TransferFunctionWidget::update_colormap()
 {
-    colormap_changed = true;
+  //colormap_changed = false;
     gpu_image_stale = true;
     current_colormap = colormaps[selected_colormap].colormap;
     // We only change opacities for now, so go through and update the opacity

@@ -22,7 +22,10 @@ struct Multivariant : public Renderer
   Ref<const DataT<float> > renderAttributesWeights;
   Ref<const DataT<uint8_t> > histMaskTexture; 
   Ref<const DataT<TransferFunction *> > tfs;
+  Ref<const DataT<TransferFunction *> > distFns;
+  Ref<const DataT<int> > segColWithAlphaModifier;
   std::vector<void *> tfIEs;
+  std::vector<void *> distFnIEs;
 };
 
 } // namespace ospray

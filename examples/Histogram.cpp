@@ -153,7 +153,34 @@ void SegHistogram::loadImage(char* filename){
     for (int j=0; j<width; j++)
       for (int k=0; k<nChannels; k++)
 	segImage[i*width*nChannels + j*nChannels + k] = image[i*width*nChannels + j*nChannels + k];
-	
+
+  // make color segment id map
+  int color_id = 0;
+  colorSegIDMap.clear();
+  segAlphaModifier.clear();
+  for (int i=0; i<height; i++){
+    for (int j=0; j<width; j++){
+      std::vector<int> currect_col;
+      for (int k=0; k<3; k++)
+	currect_col.push_back(int(segImage[i*width*nChannels + j*nChannels + k]));
+      if (colorSegIDMap.find(currect_col) == colorSegIDMap.end() ){
+	colorSegIDMap.insert(std::make_pair(currect_col, color_id));
+	segAlphaModifier.push_back(1);
+	color_id++;
+      }
+    }
+  }
+
+  std::cout <<"\n segments loaded as:\n";
+  for(auto ii=colorSegIDMap.begin(); ii!=colorSegIDMap.end(); ++ii)
+    {
+      std::cout << '{' << ii->first[0] << ", \t"
+		<< ii->first[1] << ", \t"
+		<< ii->first[2] << "} \t: \t" << ii->second << '\n';
+    }
+  std::cout <<" total "<<colorSegIDMap.size()<<  " segments\n\n";
+  
+  
   delete[] image_read;
   
 }
@@ -212,7 +239,7 @@ void SegHistogram::loadDistImage(char* distFileName){
   int read_nChannels;
   int read_width, read_height, read_channel;
   unsigned char* image_read = stbi_load(distFileName, &read_width, &read_height, &read_nChannels, 0);
-  if ((read_width != width) || (read_height != read_height)){
+  if ((read_width != width) || (read_height != height)){
     // dim has to match to the segmetation image
     std::cerr << "size mismatch: "<< width <<"x"<<height <<" expected, "
 	      << read_width <<"x"<<read_height<<" read\n";
