@@ -66,12 +66,10 @@ void Histogram::makeImage()
      }
    }
 
-   // hack here
-   maxCount = 200;
-
    for (uint32_t i = 0; i < HistImageHeight; i++) {
      for (uint32_t j = 0; j < HistImageWidth; j++) {
-       uint32_t c = std::min(image_f[i][j] / maxCount *255.f, 255.0f);
+       float c_f = std::log(image_f[i][j]) / std::log(maxCount);
+       uint32_t c = c_f*255.f;
        if (c == 0) {
 	 image[i][j][0] = (GLubyte)100;
 	 image[i][j][1] = (GLubyte)100;

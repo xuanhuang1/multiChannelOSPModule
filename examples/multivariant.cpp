@@ -68,9 +68,9 @@ unsigned int guiTextureSize = 0;
 
 GLFWwindow *glfwWindow = nullptr;
 
-const char *imageNameString = "/home/xuanhuang/Desktop/_100_100_%d_segs.png";
+const char *imageNameString = "/home/xuanhuang/Desktop/bivariantData/xr05_xray_real_neutron_ltt/100/_100_100_%d_segs.png";
 const char *distImageNameString =
-    "/home/xuanhuang/Desktop/_100_100_%d_segs_dist.png";
+    "/home/xuanhuang/Desktop/bivariantData/xr05_xray_real_neutron_ltt/100/_100_100_%d_segs_dist.png";
 
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
 static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted", "user define histogram mask"};
@@ -623,9 +623,9 @@ void GLFWOSPWindow::buildUI(){
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
-	ImGui::SameLine();
+	//ImGui::SameLine();
 	unsigned int col_to_int[3] = {colActive[0]*255, colActive[1]*255, colActive[2]*255};
-	ImGui::Text(("Seg id:"+std::to_string(segHist.getColorSegID(col_to_int))).c_str());
+	//ImGui::Text(("Seg id:"+std::to_string(segHist.getColorSegID(col_to_int))).c_str());
 	
 	static bool invisible;
 	//std::cout << colImage[0]<<"\n";
@@ -898,10 +898,15 @@ int main(int argc, const char **argv)
 {
   
   // camera
-  vec3f cam_pos{0.f, 0.f, 3.f};
-  vec3f cam_up{0.f, 1.f, 0.f};
-  vec3f cam_view{0.f, 0.f, -1.f};
+  //vec3f cam_pos{0.f, 0.f, 3.f};
+  //vec3f cam_up{0.f, 1.f, 0.f};
+  //vec3f cam_view{0.f, 0.f, -1.f};
 
+  vec3f cam_pos{0.f, 1.f, 0.f};
+  vec3f cam_up{0.f, 0.f, -1.f};
+  vec3f cam_view{0.f, -1.f, 0.f};
+
+  
 #ifdef _WIN32
   bool waitForKey = false;
   CONSOLE_SCREEN_BUFFER_INFO csbi;
