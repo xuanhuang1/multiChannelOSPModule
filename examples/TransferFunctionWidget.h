@@ -49,7 +49,7 @@ class TransferFunctionWidget {
 
     bool clicked_on_item = false;
     bool gpu_image_stale = true;
-    bool colormap_changed = true;
+    bool colormap_changed = false;
     GLuint colormap_img = -1;
   std::string guiText = "color map";
 

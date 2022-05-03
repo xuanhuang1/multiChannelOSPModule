@@ -354,7 +354,25 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	     if ((r == 0) && (g ==0) && (b == 0))
 	     return make_vec4f(0,0,0,0);
 
-	     vec4f dist = (self->distFn->get(self->distFn, a));
+	     vec4f dist = (self->distFns[0]->get(self->distFns[0], a));
+	     
+	     for (uniform int i=0; i < self->segColWithAlphaModifier.numItems; i+=4){
+	     	 float r_seg = get_int32(self->segColWithAlphaModifier, i)/255.0;
+		 float g_seg = get_int32(self->segColWithAlphaModifier, i+1)/255.0;
+		 float b_seg = get_int32(self->segColWithAlphaModifier, i+2)/255.0;
+		 float a_seg = get_int32(self->segColWithAlphaModifier, i+3);
+		 uniform int index = i/4;
+		 if (abs(r - r_seg)*abs(g - g_seg)*abs(b - b_seg) == 0){
+		    dist = (self->distFns[index]->get(self->distFns[index], a));
+		    // disable distance image alpha   
+		    // dist.w = dist.w * a_seg;
+		    break;
+		 }
+	     }
+	     	 
+
+
+
 	     float w = dist.w;
 	     ret.x = r; ret.y = g; ret.z = b; ret.w = w;
 	     }
@@ -733,17 +751,7 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
       if (self->frontBackBlendMode == 0){
       	   color = color
             + transmission * (1.f - sampledColor.w) * make_vec3f(sampledColor); 
-      	   //transmission *= sampledColor.w;
-	   
-	   // to alpha
-      	   //float a_w = 1 - luminance(make_vec3f(transmission));
-      	   //float b_w = 1 - luminance(make_vec3f(sampledColor.w));
-      	   //struct vec4f a  = {color.x, color.y, color.z, a_w};
-      	   //struct vec4f b = {sampledColor.x, sampledColor.y, sampledColor.z, b_w};
-      	   //struct vec4f retCol = alphaBlend(a, b);
-	   //b_w = (1-a_w)*b_w;
-      	   //struct vec4f retCol = huePreserveBlend(a, b);
-
+ 
       	   // set back to transmission
       	   //color = make_vec3f(retCol);
 	   

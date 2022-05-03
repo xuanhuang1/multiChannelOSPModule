@@ -165,7 +165,8 @@ export void Multivariant_set(void *uniform _self,
     uniform int numAttributes,
     uniform int tfnType,
     void *uniform tfns,
-    void *uniform distFn)
+    void *uniform distFns,
+    const Data1D *uniform segColWithAlphaModifier)
 {
   uniform Multivariant *uniform self = (uniform Multivariant * uniform) _self;
 
@@ -184,7 +185,8 @@ export void Multivariant_set(void *uniform _self,
   self->numAttributes = numAttributes;
   self->tfnType = tfnType;
   self->tfns = (TransferFunction * *uniform) tfns;
-  self->distFn = (TransferFunction * uniform) distFn;
+  self->distFns = (TransferFunction * *uniform) distFns;
+  self->segColWithAlphaModifier = *segColWithAlphaModifier;
 }
 
 vec3f Multivariant_computeAO(const uniform Multivariant *uniform self,

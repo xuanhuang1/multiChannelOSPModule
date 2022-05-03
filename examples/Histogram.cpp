@@ -66,12 +66,10 @@ void Histogram::makeImage()
      }
    }
 
-   // hack here
-   maxCount = 200;
-
    for (uint32_t i = 0; i < HistImageHeight; i++) {
      for (uint32_t j = 0; j < HistImageWidth; j++) {
-       uint32_t c = std::min(image_f[i][j] / maxCount *255.f, 255.0f);
+       float c_f = std::log(image_f[i][j]) / std::log(maxCount);
+       uint32_t c = c_f*255.f;
        if (c == 0) {
 	 image[i][j][0] = (GLubyte)100;
 	 image[i][j][1] = (GLubyte)100;
@@ -126,6 +124,7 @@ void Histogram::recreateImageTexture(){
 void SegHistogram::loadImage(char* filename){
   int read_nChannels;
   filename = filename;
+    
   unsigned char* image_read = stbi_load(filename, &width, &height, &read_nChannels, 0);
   std::cout <<"mask image: "<<width <<"x"<<height <<"x"<<read_nChannels <<" \n";
 
@@ -153,7 +152,34 @@ void SegHistogram::loadImage(char* filename){
     for (int j=0; j<width; j++)
       for (int k=0; k<nChannels; k++)
 	segImage[i*width*nChannels + j*nChannels + k] = image[i*width*nChannels + j*nChannels + k];
-	
+
+  // make color segment id map
+  int color_id = 0;
+  colorSegIDMap.clear();
+  segAlphaModifier.clear();
+  for (int i=0; i<height; i++){
+    for (int j=0; j<width; j++){
+      std::vector<int> currect_col;
+      for (int k=0; k<3; k++)
+	currect_col.push_back(int(segImage[i*width*nChannels + j*nChannels + k]));
+      if (colorSegIDMap.find(currect_col) == colorSegIDMap.end() ){
+	colorSegIDMap.insert(std::make_pair(currect_col, color_id));
+	segAlphaModifier.push_back(1);
+	color_id++;
+      }
+    }
+  }
+
+  std::cout <<"\n segments loaded as:\n";
+  for(auto ii=colorSegIDMap.begin(); ii!=colorSegIDMap.end(); ++ii)
+    {
+      std::cout << '{' << ii->first[0] << ", \t"
+		<< ii->first[1] << ", \t"
+		<< ii->first[2] << "} \t: \t" << ii->second << '\n';
+    }
+  std::cout <<" total "<<colorSegIDMap.size()<<  " segments\n\n";
+  
+  
   delete[] image_read;
   
 }
@@ -212,7 +238,7 @@ void SegHistogram::loadDistImage(char* distFileName){
   int read_nChannels;
   int read_width, read_height, read_channel;
   unsigned char* image_read = stbi_load(distFileName, &read_width, &read_height, &read_nChannels, 0);
-  if ((read_width != width) || (read_height != read_height)){
+  if ((read_width != width) || (read_height != height)){
     // dim has to match to the segmetation image
     std::cerr << "size mismatch: "<< width <<"x"<<height <<" expected, "
 	      << read_width <<"x"<<read_height<<" read\n";

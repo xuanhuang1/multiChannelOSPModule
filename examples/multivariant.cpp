@@ -68,15 +68,8 @@ unsigned int guiTextureSize = 0;
 
 GLFWwindow *glfwWindow = nullptr;
 
-const char *imageNameString = "/home/xuanhuang/Desktop/_100_100_%d_segs.png";
-const char *distImageNameString =
-    "/home/xuanhuang/Desktop/_100_100_%d_segs_dist.png";
-
-//const char *imageNameString =
-//    "C:/Users/miao1/Development/histogram_analysis_multifield/data/jh2ltt/EuroVisData/fullres/_100_100_%d_segs.png";
-//const char *distImageNameString =
-//    "C:/Users/miao1/Development/histogram_analysis_multifield/data/jh2ltt/EuroVisData/fullres/_100_100_%d_segs_dist.png";
-
+const char *imageNameString = "_100_100_%d_segs.png";
+const char *distImageNameString ="_100_100_%d_segs_dist.png";
 
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
 static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted", "user define histogram mask"};
@@ -88,6 +81,9 @@ static const std::vector<std::string> segmentRenderModeStr = {"region", "boundar
 
 static std::vector<std::string> attributeStr = {};
 
+ospray::cpp::TransferFunction makeTransferFunctionForColor(const vec2f &valueRange,
+							   const vec3f &color);
+  
 class GLFWOSPWindow{
 public:
   ospray::cpp::Camera camera{"perspective"};
@@ -129,8 +125,10 @@ public:
   std::vector<std::vector<float> >* voxel_data; // pointer to voxels data
   std::vector<Histogram> histograms; 
   SegHistogram segHist;
-  ospray::cpp::TransferFunction distFunc;
-  tfnw::TransferFunctionWidget distFnWidget;
+  std::vector<ospray::cpp::TransferFunction> distFuncs;
+  std::vector<tfnw::TransferFunctionWidget> distFnWidgets;
+
+  char imageFolderPath[256];
   
   GLFWOSPWindow(){
     activeWindow = this;
@@ -258,6 +256,7 @@ void GLFWOSPWindow::buildUI(){
   static float ratio = 0.5;
   static float alpha_scaler = 1;
   static int num_of_seg = 4;
+  static bool applyAllSegments;
 	
   if (ImGui::Combo("tfn##whichtfnType",
 		   &whichtfnType,
@@ -468,13 +467,25 @@ void GLFWOSPWindow::buildUI(){
     if (ImGui::TreeNode("External Segmentation"))
       {
         if (ImGui::SliderInt("number of segments", &num_of_seg, 4, 14)){
-	  char filename[400];
-	  sprintf( filename, imageNameString, num_of_seg );
+	  char filename[512], imageFixName[256];
+	  sprintf(imageFixName, imageNameString, num_of_seg);
+	  sprintf(filename, "%s%s", imageFolderPath, imageFixName);
 	  segHist.loadImage(filename);
-	  sprintf( filename, distImageNameString, num_of_seg );
+	  sprintf(imageFixName, distImageNameString, num_of_seg);
+	  sprintf(filename, "%s%s", imageFolderPath, imageFixName);
 	  segHist.loadDistImage(filename);
 	  segHist.applyDistAsAlpha();
 	  segHist.recreateImageTexture();
+	  
+	  distFnWidgets.resize(segHist.colorSegIDMap.size());
+	  distFuncs.clear();
+	  distFuncs.resize(0);
+	  for (uint32_t i=0; i<segHist.colorSegIDMap.size(); i++)
+	    distFuncs.push_back(makeTransferFunctionForColor(vec2f(0.f, 1.f), vec3f(1,1,1)));
+
+	  renderer.setParam("distanceFunctions", ospray::cpp::CopiedData(distFuncs));
+	  renderer.setParam("segColWithAlphaModifier", ospray::cpp::CopiedData(segHist.getSegColWithAlphaModifier()));
+
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	  
@@ -510,9 +521,13 @@ void GLFWOSPWindow::buildUI(){
 
 	const ImGuiIO &io = ImGui::GetIO();
 	bool clicked_on_item = false;
-
+	bool right_click = false;
+	bool left_click = false;
+	
 	if (ImGui::IsItemHovered() && (io.MouseDown[0] || io.MouseDown[1])) {
 	  clicked_on_item = true;
+	  if (io.MouseDown[1]) right_click = true;
+	  if (io.MouseDown[0]) left_click = true;
 	}
 
 	const vec2f view_offset(p2.x, p.y);
@@ -522,9 +537,20 @@ void GLFWOSPWindow::buildUI(){
 	ImVec2 bbmax = ImGui::GetItemRectMax();
 	ImVec2 clipped_mouse_pos = ImVec2(std::min(std::max(io.MousePos.x, bbmin.x), bbmax.x),
 					  std::min(std::max(io.MousePos.y, bbmin.y), bbmax.y));
-	static float col1[3];
-	static float col2[3];
+	static float colSegImage[3];
+	static float colActive[3];
 	static float colImage[3];
+	static float colFocus[3];
+	static bool focusEnable;
+
+	if (ImGui::Checkbox("right click focus mode enable", &focusEnable)){
+	  if (!focusEnable){
+	    segHist.applyDistAsAlpha();
+	    segHist.recreateImageTexture();
+	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	    renderer.commit();
+	  }
+	}
 	
 	if (clicked_on_item) {
 	  vec2f mouse_pos = (vec2f(clipped_mouse_pos.x, clipped_mouse_pos.y) - view_offset) / view_scale * vec2f(segHist.width, segHist.height);
@@ -536,40 +562,73 @@ void GLFWOSPWindow::buildUI(){
 		    << int(segHist.image[color_index + 1])<<" "
 		    << int(segHist.image[color_index + 2])<<" )"
 		    <<"\n";*/
-	  col1[0] = int(segHist.segImage[color_index + 0])/255.f;
-	  col1[1] = int(segHist.segImage[color_index + 1])/255.f;
-	  col1[2] = int(segHist.segImage[color_index + 2])/255.f;
+	  colSegImage[0] = int(segHist.segImage[color_index + 0])/255.f;
+	  colSegImage[1] = int(segHist.segImage[color_index + 1])/255.f;
+	  colSegImage[2] = int(segHist.segImage[color_index + 2])/255.f;
 	  
 	  colImage[0] = int(segHist.image[color_index + 0])/255.f;
 	  colImage[1] = int(segHist.image[color_index + 1])/255.f;
 	  colImage[2] = int(segHist.image[color_index + 2])/255.f;
-  	  for (int i=0; i<3; i++)
-	    col2[i] = col1[i];
+
+	  for (int i=0; i<3; i++)
+	    colActive[i] = colSegImage[i];
+	  
+	  if (right_click && focusEnable){
+	    if( (colFocus[0] != colActive[0]) ||
+		(colFocus[1] != colActive[1]) ||
+		(colFocus[2] != colActive[2])) {
+	      for (int m =0; m <segHist.width*segHist.height; m++){
+		bool color_equal = true;
+		int color_index = m*segHist.nChannels;
+		for (int i=0; i<3; i++){
+		  if(segHist.segImage[color_index+i] != int(colActive[i]*255)){
+		    color_equal = false;
+		  }
+		}
+		if (color_equal){
+		  segHist.image[color_index+3] = 255;
+		}else{
+		  segHist.image[color_index+3] = 0;
+		}
+	      }
+	      std::cout <<"one\n";
+	      for (int i=0; i<3; i++)
+		colFocus[i] = colActive[i];
+	    }
+	    	  
+	    segHist.recreateImageTexture();
+	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	    renderer.commit();
+	  }
+	  
 	}
 	
-	if(ImGui::ColorEdit3("color 1", col1)){
+	if(ImGui::ColorEdit3("color", colSegImage)){
 	  for (int m =0; m <segHist.width*segHist.height; m++){
 	    bool color_equal = true;
 	    for (int i=0; i<3; i++){
-	      if(segHist.segImage[m*segHist.nChannels+i] != int(col2[i]*255)){
+	      if(segHist.segImage[m*segHist.nChannels+i] != int(colActive[i]*255)){
 		color_equal = false;
 	      }
 	    }
 	    if (color_equal){
 	      for (int i=0; i<3; i++){
-		segHist.segImage[m*segHist.nChannels+i] = int(col1[i]*255);
-		segHist.image[m*segHist.nChannels+i] = int(col1[i]*255);
+		segHist.segImage[m*segHist.nChannels+i] = int(colSegImage[i]*255);
+		segHist.image[m*segHist.nChannels+i] = int(colSegImage[i]*255);
 		colImage[i] = int(segHist.image[m*segHist.nChannels+i])/255.f;
 	      }
 	    }
 	  }
 	  for (int i=0; i<3; i++)
-	    col2[i] = col1[i];
+	    colActive[i] = colSegImage[i];
 	  
 	  segHist.recreateImageTexture();
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
+	//ImGui::SameLine();
+	unsigned int col_to_int[3] = {colActive[0]*255, colActive[1]*255, colActive[2]*255};
+	//ImGui::Text(("Seg id:"+std::to_string(segHist.getColorSegID(col_to_int))).c_str());
 	
 	static bool invisible;
 	//std::cout << colImage[0]<<"\n";
@@ -579,16 +638,16 @@ void GLFWOSPWindow::buildUI(){
 	if(ImGui::Checkbox("set invisible", &invisible)){
 	  if(invisible){
 	    // set from visible to invisible
-	    unsigned int currentCol[3] = {col1[0]*255, col1[1]*255, col1[2]*255};
+	    unsigned int currentCol[3] = {colSegImage[0]*255, colSegImage[1]*255, colSegImage[2]*255};
 	    unsigned int toCol[3] = {0 ,0, 0};
 	    segHist.setOutputImageFromSegImage(currentCol, toCol);
 	    for (int i=0; i<3; i++)
 	      colImage[i] = 0.f;
 	  }else{
-	    unsigned int currentCol[3] = {col1[0]*255, col1[1]*255, col1[2]*255};
+	    unsigned int currentCol[3] = {colSegImage[0]*255, colSegImage[1]*255, colSegImage[2]*255};
 	    segHist.setOutputImageFromSegImage(currentCol, currentCol);
 	    for (int i=0; i<3; i++)
-	      colImage[i] = col1[i];
+	      colImage[i] = colSegImage[i];
 	  }
 
 	  segHist.recreateImageTexture();
@@ -598,42 +657,63 @@ void GLFWOSPWindow::buildUI(){
 	
 	
 
-	if (ImGui::TreeNode("distance function")){
-	  bool button = ImGui::Button("set all 0"); 
+	if (ImGui::TreeNode("distance function (click on segment to select)")){ 
 	  // distance function widget
-	  if (distFnWidget.changed() || button){
-	    std::vector<vec3f> tmpColors;
-	    std::vector<float> tmpOpacities;
-	    auto alphaOpacities = distFnWidget.get_alpha_control_pts();
-	    auto p0 = alphaOpacities[0];
-	    auto p1 = alphaOpacities[1];
-	    uint32_t current_interval_start = 0;
-	    uint32_t res = 255;
-	    if (button){
-	      for (uint32_t i=0;i<alphaOpacities.size();i++)
-		distFnWidget.alpha_control_pts[i].y = 0;
+	  int l = segHist.getColorSegID(col_to_int);
+	  if ((l >= 0) && (l < segHist.colorSegIDMap.size()))
+	  {
+	
+	    bool button = ImGui::Button("set all 0");
+	    bool applyAllClicked = ImGui::Checkbox("Apply all segments", &applyAllSegments);
+	    bool slide = ImGui::SliderInt("opacity modifier", &segHist.segAlphaModifier[l], 1, 10);
+	    distFnWidgets[l].draw_ui();
+	    
+	    if (distFnWidgets[l].changed() || button || slide || applyAllClicked){
+	      std::vector<vec3f> tmpColors;
+	      std::vector<float> tmpOpacities;
+	      auto alphaOpacities = distFnWidgets[l].get_alpha_control_pts();
+	      auto p0 = alphaOpacities[0];
+	      auto p1 = alphaOpacities[1];
+	      uint32_t current_interval_start = 0;
+	      uint32_t res = 255;
+	      if (button){
+		for (uint32_t i=0;i<alphaOpacities.size();i++){
+		  distFnWidgets[l].alpha_control_pts[i].y = 0;
+		  tmpColors.push_back(vec3f(1,1,1));
+		  tmpOpacities.push_back(0);
+		}
+	      }
+	      for (uint32_t i=0;i<res;i++){
+		if (i > alphaOpacities[current_interval_start+1].x*res)
+		  current_interval_start++;
+		p0 = alphaOpacities[current_interval_start];
+		p1 = alphaOpacities[current_interval_start+1];
+		float current_x = i/float(res);
+		float current_val = p0.y + (current_x - p0.x)/(p1.x - p0.x)*(p1.y - p0.y);
+		tmpColors.push_back(vec3f(1,1,1));
+		tmpOpacities.push_back(current_val);
+	      }
+	      distFnWidgets[l].setUnchanged();
+
+	      if(applyAllSegments){
+		for (uint32_t i=0; i<distFnWidgets.size(); i++){
+		  distFnWidgets[i].alpha_control_pts = alphaOpacities;
+		  distFuncs[i].setParam("color", ospray::cpp::CopiedData(tmpColors));
+		  distFuncs[i].setParam("opacity", ospray::cpp::CopiedData(tmpOpacities));
+		  distFuncs[i].commit();
+		}
+	      }else{
+		distFuncs[l].setParam("color", ospray::cpp::CopiedData(tmpColors));
+		distFuncs[l].setParam("opacity", ospray::cpp::CopiedData(tmpOpacities));
+		distFuncs[l].commit();
+	      }
+	      if (slide) renderer.setParam("segColWithAlphaModifier", ospray::cpp::CopiedData(segHist.getSegColWithAlphaModifier()));
+    
+	      renderer.setParam("distanceFunctions", ospray::cpp::CopiedData(distFuncs));
+	      renderer.commit();
 	    }
-	    for (uint32_t i=0;i<res;i++){
-	      if (i > alphaOpacities[current_interval_start+1].x*res)
-		current_interval_start++;
-	      p0 = alphaOpacities[current_interval_start];
-	      p1 = alphaOpacities[current_interval_start+1];
-	      float current_x = i/float(res);
-	      float current_val = p0.y + (current_x - p0.x)/(p1.x - p0.x)*(p1.y - p0.y);
-	      tmpColors.push_back(vec3f(1,1,1));
-	      tmpOpacities.push_back(current_val);
-	    }
-	    distFnWidget.setUnchanged();
-	  
-	    distFunc.setParam("color", ospray::cpp::CopiedData(tmpColors));
-	    distFunc.setParam("opacity", ospray::cpp::CopiedData(tmpOpacities));
-	    distFunc.commit();
-	    renderer.setParam("distanceFunction", distFunc);
-	    renderer.commit(); 
 	  }
         
-
-	  distFnWidget.draw_ui();
 	  ImGui::TreePop();
 	}
 
@@ -821,10 +901,15 @@ int main(int argc, const char **argv)
 {
   
   // camera
-  vec3f cam_pos{0.f, 0.f, 3.f};
-  vec3f cam_up{0.f, 1.f, 0.f};
-  vec3f cam_view{0.f, 0.f, -1.f};
+  //vec3f cam_pos{0.f, 0.f, 3.f};
+  //vec3f cam_up{0.f, 1.f, 0.f};
+  //vec3f cam_view{0.f, 0.f, -1.f};
 
+  vec3f cam_pos{0.f, 1.f, 0.f};
+  vec3f cam_up{0.f, 0.f, -1.f};
+  vec3f cam_view{0.f, -1.f, 0.f};
+
+  
 #ifdef _WIN32
   bool waitForKey = false;
   CONSOLE_SCREEN_BUFFER_INFO csbi;
@@ -841,8 +926,8 @@ int main(int argc, const char **argv)
     return init_error;
 
   ospLoadModule("multivariant_renderer");
-  if (argc < 5) {
-      ::std::cerr << "Usage: " << argv[0] << "<filename> x y z n_of_channels\n";
+  if (argc < 7) {
+      ::std::cerr << "Usage: " << argv[0] << "<filename> x y z n_of_channels <imageFolderPath>\n";
       return 1;
   }
   
@@ -1052,25 +1137,34 @@ int main(int argc, const char **argv)
       glfwOspWindow.tfn_widgets.push_back(tmp);
     }
     
-    glfwOspWindow.distFnWidget.setGuiText("distance function");
+    //glfwOspWindow.distFnWidget.setGuiText("distance function");
 
-    //set histogram texture        
+    // set histogram texture        
     Histogram h(voxels_read, 0, 0);
     if (n_of_ch > 1) h.ch_index_1 = 1;
     h.makeImage();
     h.createImageTexture();
     glfwOspWindow.histograms.push_back(h);
 
-    char filename[256];
-    sprintf( filename, imageNameString, 4);
+    // load images
+    char filename[512], imageFixName[256];
+    sprintf(glfwOspWindow.imageFolderPath, "%s", argv[6]);
+    
+    sprintf(imageFixName, imageNameString, 4);
+    sprintf(filename, "%s%s", glfwOspWindow.imageFolderPath, imageFixName);
     glfwOspWindow.segHist.loadImage(filename);
-    sprintf( filename, distImageNameString, 4);
+
+    sprintf(imageFixName, distImageNameString, 4);
+    sprintf(filename, "%s%s", glfwOspWindow.imageFolderPath, imageFixName);
     glfwOspWindow.segHist.loadDistImage(filename);
     glfwOspWindow.segHist.applyDistAsAlpha();
     glfwOspWindow.segHist.createImageTexture();
     glfwOspWindow.segHist.createDistImageTexture();
-    glfwOspWindow.distFunc = makeTransferFunctionForColor(vec2f(0.f, 1.f), vec3f(1,1,1));
 
+    glfwOspWindow.distFnWidgets.resize(glfwOspWindow.segHist.colorSegIDMap.size());
+    for (uint32_t i=0; i<glfwOspWindow.segHist.colorSegIDMap.size(); i++)
+      glfwOspWindow.distFuncs.push_back(makeTransferFunctionForColor(vec2f(0.f, 1.f), vec3f(1,1,1)));
+    
     
     // complete setup of renderer
     renderer->setParam("aoSamples", 10);
@@ -1085,7 +1179,10 @@ int main(int argc, const char **argv)
     renderer->setParam("numAttributes", voxels_read.size());
     renderer->setParam("tfnType", glfwOspWindow.tfnType); // 0:same tfn all channel 1: pick evenly on hue
     renderer->setParam("transferFunctions", ospray::cpp::CopiedData(glfwOspWindow.tfns));
-    renderer->setParam("distanceFunction", glfwOspWindow.distFunc);
+
+    renderer->setParam("distanceFunctions", ospray::cpp::CopiedData(glfwOspWindow.distFuncs));
+    renderer->setParam("segColWithAlphaModifier", ospray::cpp::CopiedData(glfwOspWindow.segHist.getSegColWithAlphaModifier()));
+    
     renderer->commit();
 
     // create and setup camera

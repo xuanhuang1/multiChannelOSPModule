@@ -33,14 +33,15 @@ void Multivariant::commit()
   histMaskTexture = getParamDataT<unsigned char>("histMaskTexture", false);
   
   tfs = getParamDataT<TransferFunction *>("transferFunctions", false);
-  
-  auto *distFunction = (TransferFunction *)getParamObject("distanceFunction", nullptr);
+  distFns = getParamDataT<TransferFunction *>("distanceFunctions", false);
+  segColWithAlphaModifier = getParamDataT<int>("segColWithAlphaModifier", false);
 
-  if (distFunction == nullptr)
+  if (!distFns)
     throw std::runtime_error("volumetric model must have 'distanceFunction'");
 
   
   tfIEs = createArrayOfIE(*tfs);
+  distFnIEs = createArrayOfIE(*distFns);
   
   ispc::Multivariant_set(getIE(),
 			 getParam<bool>("shadows", false),
@@ -58,7 +59,8 @@ void Multivariant::commit()
 			 getParam<int>("numAttributes", 0),
 			 getParam<int>("tfnType", 0),
 			 tfIEs.data(),
-			 distFunction->getIE()
+			 distFnIEs.data(),
+			 ispc(segColWithAlphaModifier)
 			 );
 }
 
