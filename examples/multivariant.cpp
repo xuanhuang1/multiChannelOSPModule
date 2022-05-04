@@ -127,7 +127,10 @@ public:
   SegHistogram segHist;
   std::vector<ospray::cpp::TransferFunction> distFuncs;
   std::vector<tfnw::TransferFunctionWidget> distFnWidgets;
-
+  int blinkCounter = 0;
+  int blinkDuration = 30;
+  bool inBlink = false;
+  
   char imageFolderPath[256];
   
   GLFWOSPWindow(){
@@ -551,6 +554,17 @@ void GLFWOSPWindow::buildUI(){
 	    renderer.commit();
 	  }
 	}
+
+	if ((inBlink) && (blinkCounter >= blinkDuration )){
+	  std::cout << "end blink\n";
+	  inBlink = false;
+	  blinkCounter = 0;
+	  segHist.applyDistAsAlpha();
+	    segHist.recreateImageTexture();
+	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	    renderer.commit();
+	}
+	  
 	
 	if (clicked_on_item) {
 	  vec2f mouse_pos = (vec2f(clipped_mouse_pos.x, clipped_mouse_pos.y) - view_offset) / view_scale * vec2f(segHist.width, segHist.height);
@@ -572,6 +586,33 @@ void GLFWOSPWindow::buildUI(){
 
 	  for (int i=0; i<3; i++)
 	    colActive[i] = colSegImage[i];
+
+	  if (left_click && (!inBlink)){
+	    inBlink = true;
+	    blinkCounter = 0;
+	    for (int m =0; m <segHist.width*segHist.height; m++){
+	      bool color_equal = true;
+	      int color_index = m*segHist.nChannels;
+	      for (int i=0; i<3; i++){
+		if(segHist.segImage[color_index+i] != int(colActive[i]*255)){
+		  color_equal = false;
+		}
+	      }
+	      if (color_equal){
+		segHist.image[color_index+3] = 255;
+	      }else{
+		segHist.image[color_index+3] = 0;
+	      }
+	    }
+	    for (int i=0; i<3; i++)
+	      colFocus[i] = colActive[i];
+	    
+	    	  
+	    segHist.recreateImageTexture();
+	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	    renderer.commit();
+	  }
+	
 	  
 	  if (right_click && focusEnable){
 	    if( (colFocus[0] != colActive[0]) ||
@@ -591,7 +632,6 @@ void GLFWOSPWindow::buildUI(){
 		  segHist.image[color_index+3] = 0;
 		}
 	      }
-	      std::cout <<"one\n";
 	      for (int i=0; i<3; i++)
 		colFocus[i] = colActive[i];
 	    }
@@ -657,7 +697,7 @@ void GLFWOSPWindow::buildUI(){
 	
 	
 
-	if (ImGui::TreeNode("distance function (click on segment to select)")){ 
+	if (ImGui::TreeNode("opacity function (click on segment to select)")){ 
 	  // distance function widget
 	  int l = segHist.getColorSegID(col_to_int);
 	  if ((l >= 0) && (l < segHist.colorSegIDMap.size()))
@@ -722,7 +762,7 @@ void GLFWOSPWindow::buildUI(){
   }
  
   ImGui::End();
-
+  if (inBlink) blinkCounter++;
 }
 
 void GLFWOSPWindow::motion(double x, double y)
@@ -883,7 +923,7 @@ ospray::cpp::TransferFunction makeTransferFunctionForColor(const vec2f &valueRan
   colors.emplace_back(color[0], color[1], color[2]);
   
 
-    opacities.emplace_back(0.f);
+    opacities.emplace_back(1.f);
     opacities.emplace_back(1.f);
 
   transferFunction.setParam("color", ospray::cpp::CopiedData(colors));
