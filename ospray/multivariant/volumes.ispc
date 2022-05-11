@@ -238,7 +238,8 @@ struct vec4f blendWithDiffHue(varying float* samples,
 			      uniform unsigned int blendMode,
     			      const uniform Multivariant *uniform self,
 			      uniform unsigned int *uniform attributeIndices,
-			      vec3f p)
+			      vec3f p,
+			      varying float depth)
 {
   // pick color evenly between RGB hue
   struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
@@ -351,7 +352,7 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	     	a = a * abs(gradient*gradient *10);
 	     }
 	     // black is reserved for invisible
-	     if ((r == 0) && (g ==0) && (b == 0))
+	     if (((r == 0) && (g ==0) && (b == 0)) || (a == 0))
 	     return make_vec4f(0,0,0,0);
 
 	     vec4f dist = (self->distFns[0]->get(self->distFns[0], a));
@@ -370,11 +371,10 @@ struct vec4f blendWithDiffHue(varying float* samples,
 		 }
 	     }
 	     	 
-
-
-
 	     float w = dist.w;
-	     ret.x = r; ret.y = g; ret.z = b; ret.w = w;
+	     float depthScaler = clamp(pow(1-depth/5.f, 3));
+	     ret.x = r*depthScaler; ret.y = g*depthScaler; ret.z = b*depthScaler;
+	     ret.w = w;
 	     }
 	  }
       }
@@ -398,6 +398,7 @@ static void sampleVolume(MultivariantRenderContext &rc,
     Ray &ray,
     const VolumeInterval &vi,
     const uniform float samplingRate,
+    vec4f &lastSampledColor,
     const uniform bool shade,
     const uniform Multivariant *uniform self)
 {
@@ -476,73 +477,35 @@ static void sampleVolume(MultivariantRenderContext &rc,
      if (self->tfnType == 0) 
      	vc.sample = blendWithSameTF(samples, M, m, blendMode, self, attributeIndices);
      else //if (self->tfnType == 1)
-        vc.sample = blendWithDiffHue(samples, M, m, blendMode, self, attributeIndices, p);
+        vc.sample = blendWithDiffHue(samples, M, m, blendMode, self, attributeIndices, p, vc.distance);
   }
 
   // Xuan: blinn shading, assume directional light 
 
   vec3f ns = Volume_getGradient(m->volume, p);
   bool shade = self->shadeMode;
-  if(shade && (self->blendMode == 5)){
-     vec3f N = normalize(ns);
+
+  vec3f N = normalize(ns);
+  float nLen = dot(ns, ns);
+  //if (nLen < 0.8) shade = false;
+  //if(shade && (self->blendMode == 5)){
+  if(0){  
      vec3f V = normalize(neg(vc.dir));
-     vec3f L = normalize(make_vec3f(0.f, -10.f, -10.f));
+     vec3f L = normalize(make_vec3f(0.f, 10.f, 10.f));
      vec3f H = normalize((L+V)/sqrt(dot((L+V), (L+V))));
-     float NH = dot(N, H);
-
-     const unsigned int sampleCnt = 10;
-     RNGState state;
-     vec3f ssaoKernel[10];
-     vec3f gradient = {0.f, 0.f, 0.f};
-     float ao_scale = 0;
+     float NH = abs(dot(N, H));
      
-     for (unsigned int i = 0; i < sampleCnt; ++i)
-     {
-     seed_rng(&state, i + ((p.x+1.0)*100*100*1000 + (p.y+1.0)*100*1000 + (p.z+1.0)*1000));
-      vec3f sample = {
-        (random(&state)%100)/100.f * 2.0 - 1.0, 
-        (random(&state)%100)/100.f * 2.0 - 1.0, 
-        (random(&state)%100)/100.f
-      };
-      sample = normalize(sample) * 0.02f;
-      sample = (random(&state)%100)/100.f*sample;
-      ssaoKernel[i] = sample;
-
-      vec3f p_ao = sample + p;
-      float samples_ao[128];
-      vkl_range1f ranges[128];
-
-      for (uniform int i=0; i<M; i++){
-      	  ranges[i]= vklGetValueRange(m->volume->vklVolume, i);
-      }
-   
-      vklComputeSampleMV(
-        m->volume->vklSampler, (const varying vkl_vec3f *uniform) & p_ao,
-	samples_ao, M, attributeIndices);
-	
-      int prev_val = (samples_ao[0] - ranges[0].lower) / (ranges[0].upper - ranges[0].lower) * 100.f;
-      int this_val = (samples_ao[1] - ranges[1].lower) / (ranges[1].upper - ranges[1].lower)* 100.f;
-      int idx = prev_val*100*4 + this_val*4;
-      float a = get_uint8(self->histMaskTexture, idx+3) / 255.f;
-      prev_val = (samples[0] - ranges[0].lower) / (ranges[0].upper - ranges[0].lower) * 100.f;
-      this_val = (samples[1] - ranges[1].lower) / (ranges[1].upper - ranges[1].lower)* 100.f;
-      idx = prev_val*100*4 + this_val*4;
-      float a_p = get_uint8(self->histMaskTexture, idx+3) / 255.f;
-      
-      if (a > 0.1) ao_scale = ao_scale + 1.f/sampleCnt;
-      gradient = gradient + (a_p - a)*sample/(sampleCnt + 0.f);
-     }
-     //float gradientLen = sqrt(dot(gradient, gradient));
-     gradient = normalize(gradient);
-     N = neg(gradient);
+     N = neg(ns);
      NH = dot(N, H);
-     ao_scale = 0;
-     vc.sample.x = max(NH, 0)*vc.sample.x *(1-ao_scale);
-     vc.sample.y = max(NH, 0)*vc.sample.y *(1-ao_scale);
-     vc.sample.z = max(NH, 0)*vc.sample.z *(1-ao_scale);
-     //vc.sample.x = ns.x;
-     //vc.sample.y = ns.y;
-     //vc.sample.z = ns.z;
+     vc.sample.x = max(abs(NH), 0)*vc.sample.x;
+     vc.sample.y = max(abs(NH), 0)*vc.sample.y;
+     vc.sample.z = max(abs(NH), 0)*vc.sample.z;
+     vc.sample.x = N.x;
+     vc.sample.y = N.y;
+     vc.sample.z = N.z;
+     lastSampledColor.x = vc.sample.x;
+     lastSampledColor.y = vc.sample.y;
+     lastSampledColor.z = vc.sample.z;
   }
   
   // compute gradient shading lighting
@@ -581,7 +544,11 @@ static void sampleVolume(MultivariantRenderContext &rc,
   // Xuan: adjusted here for a more opaque look
   float scaleModifier = self->intensityModifier;
   //if (self->blendMode == 5) scaleModifier = 100;
-  vc.sample.w = exp(-vc.sample.w * dt * m->densityScale*scaleModifier);
+
+  //vc.sample.x = 1;
+  //if((dot(N,N) >0.1))
+  vc.sample.w = 1 - vc.sample.w*dt* m->densityScale*scaleModifier;
+  //exp(-vc.sample.w * dt * m->densityScale*scaleModifier);
 }
 
 static float sampleAllVolumes(MultivariantRenderContext &rc,
@@ -590,6 +557,7 @@ static float sampleAllVolumes(MultivariantRenderContext &rc,
     Ray &ray,
     const uniform float samplingRate,
     vec4f &sampledColor,
+    vec4f &lastSampledColor,
     const uniform bool shade,
     const uniform Multivariant *uniform self)
 {
@@ -606,7 +574,7 @@ static float sampleAllVolumes(MultivariantRenderContext &rc,
     if (vc.ready == 0) {
       const VolumeInterval &vi = volumeIntervals.intervals[i];
       foreach_unique (m in vi.volumetricModel) {
-        sampleVolume(rc, vc, m, ray, vi, samplingRate, shade, self);
+        sampleVolume(rc, vc, m, ray, vi, samplingRate, lastSampledColor, shade, self);
       }
       vc.ready = 1;
     }
@@ -729,6 +697,7 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
       }
     }
 
+    vec4f lastSampledColor;
     // Propagate ray across all volumes till opaque
     while (transmission > 0.f) {
       // Sample across all volumes
@@ -739,6 +708,7 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
           ray,
           samplingRate,
           sampledColor,
+	  lastSampledColor,
           shade,
 	  self
 	  );
@@ -778,7 +748,6 @@ vec4f integrateVolumeIntervalsGradient(MultivariantRenderContext &rc,
       	      transmission = sampledColor.w;
 	   }
       }
-
 
       // Stop if we reached min contribution
       if (transmission < rc.renderer->super.minContribution)

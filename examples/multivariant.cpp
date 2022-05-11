@@ -68,9 +68,8 @@ unsigned int guiTextureSize = 0;
 
 GLFWwindow *glfwWindow = nullptr;
 
-const char *imageNameString = "/home/xuanhuang/Desktop/bivariantData/xr05_xray_real_neutron_ltt/100/_100_100_%d_segs.png";
-const char *distImageNameString =
-    "/home/xuanhuang/Desktop/bivariantData/xr05_xray_real_neutron_ltt/100/_100_100_%d_segs_dist.png";
+const char *imageNameString = "_100_100_%d_segs.png";
+const char *distImageNameString ="_100_100_%d_segs_dist.png";
 
 static const std::vector<std::string> tfnTypeStr = {"all channel same", "evenly spaced hue"};
 static const std::vector<std::string> blendModeStr = {"add", "alpha blend", "hue preserve", "highest value dominate", "histogram weighted", "user define histogram mask"};
@@ -128,6 +127,11 @@ public:
   SegHistogram segHist;
   std::vector<ospray::cpp::TransferFunction> distFuncs;
   std::vector<tfnw::TransferFunctionWidget> distFnWidgets;
+  int blinkCounter = 0;
+  int blinkDuration = 10;
+  bool inBlink = false;
+  
+  char imageFolderPath[256];
   
   GLFWOSPWindow(){
     activeWindow = this;
@@ -256,6 +260,8 @@ void GLFWOSPWindow::buildUI(){
   static float alpha_scaler = 1;
   static int num_of_seg = 4;
   static bool applyAllSegments;
+  static bool enablePainting = false;
+  
 	
   if (ImGui::Combo("tfn##whichtfnType",
 		   &whichtfnType,
@@ -466,10 +472,12 @@ void GLFWOSPWindow::buildUI(){
     if (ImGui::TreeNode("External Segmentation"))
       {
         if (ImGui::SliderInt("number of segments", &num_of_seg, 4, 14)){
-	  char filename[400];
-	  sprintf( filename, imageNameString, num_of_seg );
+	  char filename[512], imageFixName[256];
+	  sprintf(imageFixName, imageNameString, num_of_seg);
+	  sprintf(filename, "%s%s", imageFolderPath, imageFixName);
 	  segHist.loadImage(filename);
-	  sprintf( filename, distImageNameString, num_of_seg );
+	  sprintf(imageFixName, distImageNameString, num_of_seg);
+	  sprintf(filename, "%s%s", imageFolderPath, imageFixName);
 	  segHist.loadDistImage(filename);
 	  segHist.applyDistAsAlpha();
 	  segHist.recreateImageTexture();
@@ -539,6 +547,8 @@ void GLFWOSPWindow::buildUI(){
 	static float colImage[3];
 	static float colFocus[3];
 	static bool focusEnable;
+	static float colorPaint[3];
+	static int brushRadius = 5;
 
 	if (ImGui::Checkbox("right click focus mode enable", &focusEnable)){
 	  if (!focusEnable){
@@ -548,6 +558,17 @@ void GLFWOSPWindow::buildUI(){
 	    renderer.commit();
 	  }
 	}
+
+	if ((inBlink) && (blinkCounter >= blinkDuration )){
+	  std::cout << "end blink\n";
+	  inBlink = false;
+	  blinkCounter = 0;
+	  segHist.applyDistAsAlpha();
+	    segHist.recreateImageTexture();
+	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	    renderer.commit();
+	}
+	  
 	
 	if (clicked_on_item) {
 	  vec2f mouse_pos = (vec2f(clipped_mouse_pos.x, clipped_mouse_pos.y) - view_offset) / view_scale * vec2f(segHist.width, segHist.height);
@@ -569,8 +590,33 @@ void GLFWOSPWindow::buildUI(){
 
 	  for (int i=0; i<3; i++)
 	    colActive[i] = colSegImage[i];
-	  
-	  if (right_click && focusEnable){
+
+	  if (left_click && (!inBlink) && (!enablePainting)){
+	    inBlink = true;
+	    blinkCounter = 0;
+	    for (int m =0; m <segHist.width*segHist.height; m++){
+	      bool color_equal = true;
+	      int color_index = m*segHist.nChannels;
+	      for (int i=0; i<3; i++){
+		if(segHist.segImage[color_index+i] != int(colActive[i]*255)){
+		  color_equal = false;
+		}
+	      }
+	      if (color_equal){
+		segHist.image[color_index+3] = 255;
+	      }else{
+		segHist.image[color_index+3] = 0;
+	      }
+	    }
+	    for (int i=0; i<3; i++)
+	      colFocus[i] = colActive[i];
+	    
+	    	  
+	    segHist.recreateImageTexture();
+	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	    renderer.commit();
+	  }
+	  else if (right_click && focusEnable){
 	    if( (colFocus[0] != colActive[0]) ||
 		(colFocus[1] != colActive[1]) ||
 		(colFocus[2] != colActive[2])) {
@@ -588,11 +634,31 @@ void GLFWOSPWindow::buildUI(){
 		  segHist.image[color_index+3] = 0;
 		}
 	      }
-	      std::cout <<"one\n";
 	      for (int i=0; i<3; i++)
 		colFocus[i] = colActive[i];
 	    }
 	    	  
+	    segHist.recreateImageTexture();
+	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	    renderer.commit();
+	  }else if (left_click && enablePainting){
+	    std::cout << "["<<mouse_pos.x <<" "<<mouse_pos.y<<"]: " 
+		      << colorPaint[0] <<" "<<colorPaint[1]<<" "<<colorPaint[2]
+		      <<"\n";
+	    for (int i=0; i<brushRadius*2; i++){
+	      for (int j=0; j<brushRadius*2; j++){
+		int imageX = clamp(int(mouse_pos.x)-brushRadius+i, 0, segHist.width); 
+		int imageY = clamp(int(mouse_pos.y)-brushRadius+j, 0, segHist.height);
+		int color_index = imageY*segHist.width*segHist.nChannels
+		  + imageX*segHist.nChannels;
+		for (int k=0; k<3; k++){
+		  if ( pow(i-brushRadius, 2) + pow(j-brushRadius, 2) < brushRadius*brushRadius  ){
+		    segHist.segImage[color_index+k] = int(colorPaint[k]*255);
+		    segHist.image[color_index+k] = int(colorPaint[k]*255);
+		  }
+		}
+	      }
+	    }
 	    segHist.recreateImageTexture();
 	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	    renderer.commit();
@@ -632,7 +698,7 @@ void GLFWOSPWindow::buildUI(){
 	if ((!colImage[0]) && (!colImage[1]) && (!colImage[2])){ invisible = true;}
  	else invisible = false;
 	  
-	if(ImGui::Checkbox("set invisible", &invisible)){
+	if(ImGui::Checkbox("set segment of this color invisible", &invisible)){
 	  if(invisible){
 	    // set from visible to invisible
 	    unsigned int currentCol[3] = {colSegImage[0]*255, colSegImage[1]*255, colSegImage[2]*255};
@@ -651,10 +717,34 @@ void GLFWOSPWindow::buildUI(){
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
-	
-	
 
-	if (ImGui::TreeNode("distance function (click on segment to select)")){ 
+	//
+	ImGui::Checkbox("paint mode enable", &enablePainting); ImGui::SameLine();
+	if(ImGui::SmallButton("reset image")){
+	  
+	  segHist.loadImage(segHist.filename.c_str());
+	  segHist.recreateImageTexture();
+	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	  renderer.commit();
+	  
+	} ImGui::SameLine();
+	if(ImGui::SmallButton("saveImage")){
+	  segHist.writeImage("writeImage.png");
+	}
+	if (enablePainting){
+	  ImGui::SliderInt("radius", &brushRadius, 1, 20);
+	  ImGui::ColorEdit3("paint color", colorPaint);
+	  //std::cout << brushRadius <<"\n";
+	  ImDrawList* draw_list = ImGui::GetWindowDrawList();
+	  draw_list->AddCircle(ImVec2(io.MousePos.x, io.MousePos.y),
+			       brushRadius,
+	  		       ImColor(colorPaint[0], colorPaint[1],
+				       colorPaint[2], 1.0f));
+	  
+	}
+	
+	// disable opacity function for now
+	if (0 && ImGui::TreeNode("opacity function (click on segment to select)")){ 
 	  // distance function widget
 	  int l = segHist.getColorSegID(col_to_int);
 	  if ((l >= 0) && (l < segHist.colorSegIDMap.size()))
@@ -719,7 +809,7 @@ void GLFWOSPWindow::buildUI(){
   }
  
   ImGui::End();
-
+  if (inBlink) blinkCounter++;
 }
 
 void GLFWOSPWindow::motion(double x, double y)
@@ -880,7 +970,7 @@ ospray::cpp::TransferFunction makeTransferFunctionForColor(const vec2f &valueRan
   colors.emplace_back(color[0], color[1], color[2]);
   
 
-    opacities.emplace_back(0.f);
+    opacities.emplace_back(1.f);
     opacities.emplace_back(1.f);
 
   transferFunction.setParam("color", ospray::cpp::CopiedData(colors));
@@ -923,8 +1013,8 @@ int main(int argc, const char **argv)
     return init_error;
 
   ospLoadModule("multivariant_renderer");
-  if (argc < 5) {
-      ::std::cerr << "Usage: " << argv[0] << "<filename> x y z n_of_channels\n";
+  if (argc < 7) {
+      ::std::cerr << "Usage: " << argv[0] << "<filename> x y z n_of_channels <imageFolderPath>\n";
       return 1;
   }
   
@@ -1136,17 +1226,23 @@ int main(int argc, const char **argv)
     
     //glfwOspWindow.distFnWidget.setGuiText("distance function");
 
-    //set histogram texture        
+    // set histogram texture        
     Histogram h(voxels_read, 0, 0);
     if (n_of_ch > 1) h.ch_index_1 = 1;
     h.makeImage();
     h.createImageTexture();
     glfwOspWindow.histograms.push_back(h);
 
-    char filename[256];
-    sprintf( filename, imageNameString, 4);
+    // load images
+    char filename[512], imageFixName[256];
+    sprintf(glfwOspWindow.imageFolderPath, "%s", argv[6]);
+    
+    sprintf(imageFixName, imageNameString, 4);
+    sprintf(filename, "%s%s", glfwOspWindow.imageFolderPath, imageFixName);
     glfwOspWindow.segHist.loadImage(filename);
-    sprintf( filename, distImageNameString, 4);
+
+    sprintf(imageFixName, distImageNameString, 4);
+    sprintf(filename, "%s%s", glfwOspWindow.imageFolderPath, imageFixName);
     glfwOspWindow.segHist.loadDistImage(filename);
     glfwOspWindow.segHist.applyDistAsAlpha();
     glfwOspWindow.segHist.createImageTexture();

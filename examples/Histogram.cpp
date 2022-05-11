@@ -1,6 +1,8 @@
 #include "Histogram.h"
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
+#include "stb_image_write.h"
 #include <iostream>
 
 
@@ -119,11 +121,16 @@ void Histogram::recreateImageTexture(){
 	       image);
 }
 
+void SegHistogram::writeImage(const char* filename){
+  stbi_write_png(filename, width, height, 4, &segImage[0], width*4);
+  std::cout << "wrote to image: "<< filename<<"\n";
+}
 
-
-void SegHistogram::loadImage(char* filename){
+void SegHistogram::loadImage(const char* filename){
   int read_nChannels;
-  filename = filename;
+  this->filename = filename;
+  std::cout << "load image:" << this->filename<<"\n";
+  
   unsigned char* image_read = stbi_load(filename, &width, &height, &read_nChannels, 0);
   std::cout <<"mask image: "<<width <<"x"<<height <<"x"<<read_nChannels <<" \n";
 

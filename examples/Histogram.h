@@ -38,12 +38,12 @@ public:
   int width;
   int height;
   int nChannels;
-  char* filename;
+  std::string filename;
   std::map<std::vector<int>, int> colorSegIDMap = {};
   std::vector<int> segAlphaModifier = {};
   
   SegHistogram(){};
-  void loadImage(char* filename);
+  void loadImage(const char* filename);
   void createImageTexture();
   void recreateImageTexture();
   
@@ -54,6 +54,8 @@ public:
   void scaleAlphaForPixel(float scale, int col_index);
   void setOutputImageFromSegImage(unsigned int from[3], unsigned int to[3]);
 
+  void writeImage(const char* filename);
+  
   int getColorSegID(unsigned int col[3]){
     std::vector<int> color = {int(col[0]), int(col[1]), int(col[2])};
     if (colorSegIDMap.find(color) != colorSegIDMap.end() ) return colorSegIDMap[color];
