@@ -300,8 +300,8 @@ void SegHistogram::applyDistAsAlpha(){
   }
   for (int i=0; i<height; i++)
       for (int j=0; j<width; j++)
-	image[i*width*nChannels + j*nChannels + 3] = distImage[i*width*nChannels + j*nChannels];
-
+	image[i*width*nChannels + j*nChannels + 3] = 255;//distImage[i*width*nChannels + j*nChannels];
+  std::cout << "ignore distance image, apply uniform \n";
 }
 
 void SegHistogram::scaleAlphaForPixel(float scale, int col_index){

@@ -60,7 +60,7 @@ using namespace rkcommon;
 using namespace rkcommon::math;
 
 // image size
-vec2i imgSize{400, 300};
+vec2i imgSize{800, 600};
 vec2i windowSize{800,600};
 unsigned int texture;
 unsigned int guiTextures[128];
@@ -181,7 +181,18 @@ void GLFWOSPWindow::display()
    
    renderNewFrame();
    auto fb = framebuffer.map(OSP_FB_COLOR);
-  
+
+   if (1){ // weird dead pixel 
+     uint32_t testX = 133;
+     uint32_t testY = 94;
+     uint32_t testPixel = testY*imgSize.x*4 + testX*4;
+     for (int i=0; i<4; i++)
+         ((float*)fb)[testPixel+i] = ((float*)fb)[testPixel+i+4] ;
+     //((float*)fb)[testPixel] = 255;//((float*)fb)[testPixel+i+4]
+     //((float*)fb)[testPixel+1] = 255;//((float*)fb)[testPixel+i+4]
+     //((float*)fb)[testPixel+2] = 0;//((float*)fb)[testPixel+i+4]
+   }
+   
    glTexImage2D(GL_TEXTURE_2D,
 		0,
 		GL_RGBA32F,

@@ -239,7 +239,8 @@ struct vec4f blendWithDiffHue(varying float* samples,
     			      const uniform Multivariant *uniform self,
 			      uniform unsigned int *uniform attributeIndices,
 			      vec3f p,
-			      varying float depth)
+			      VolumeContext &vc,
+			      float enterDist)
 {
   // pick color evenly between RGB hue
   struct vec4f ret = {0.f, 0.f, 0.f, 0.f};
@@ -336,6 +337,8 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	     int prev_val = (samples[prev_i] - ranges[prev_i].lower) / (ranges[prev_i].upper - ranges[prev_i].lower) * 100.f;
 	     int this_val = (samples[i] - ranges[i].lower) / (ranges[i].upper - ranges[i].lower)* 100.f;
 
+	     prev_val = clamp(prev_val, 0, 99);
+	     this_val = clamp(this_val, 0, 99);
 	     // modify here to sample texture for rgb value
 	     // use only alpha from the first channel
 	     // 2d index is [prev_val][this_val] col major texture image
@@ -372,7 +375,8 @@ struct vec4f blendWithDiffHue(varying float* samples,
 	     }
 	     	 
 	     float w = dist.w;
-	     float depthScaler = clamp(pow(1-depth/5.f, 3));
+	     float relativeDepth = (vc.distance - 1.5)/2.0;
+	     float depthScaler = clamp(pow(1-relativeDepth, 3));
 	     ret.x = r*depthScaler; ret.y = g*depthScaler; ret.z = b*depthScaler;
 	     ret.w = w;
 	     }
@@ -402,6 +406,9 @@ static void sampleVolume(MultivariantRenderContext &rc,
     const uniform bool shade,
     const uniform Multivariant *uniform self)
 {
+  // Xuan: record enter distance
+  float enterDist;
+
   // We have to iterate till we get a valid sample value
   float dt;
   float sampleVal = nan;
@@ -439,8 +446,12 @@ static void sampleVolume(MultivariantRenderContext &rc,
             / samplingStep;
 
         // Initialize distance if necessary
-        vc.distance =
-            (vc.distance == inf) ? vc.interval.tRange.lower : vc.distance;
+        //vc.distance =
+        //    (vc.distance == inf) ? vc.interval.tRange.lower : vc.distance;
+	if (vc.distance == inf){
+	   vc.distance = vc.interval.tRange.lower;
+	   enterDist = vc.distance;
+	}
 
       } else {
         // The end of the volume has been reached
@@ -477,7 +488,7 @@ static void sampleVolume(MultivariantRenderContext &rc,
      if (self->tfnType == 0) 
      	vc.sample = blendWithSameTF(samples, M, m, blendMode, self, attributeIndices);
      else //if (self->tfnType == 1)
-        vc.sample = blendWithDiffHue(samples, M, m, blendMode, self, attributeIndices, p, vc.distance);
+        vc.sample = blendWithDiffHue(samples, M, m, blendMode, self, attributeIndices, p, vc, enterDist);
   }
 
   // Xuan: blinn shading, assume directional light 
