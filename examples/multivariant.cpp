@@ -551,7 +551,7 @@ void GLFWOSPWindow::buildUI(){
 
           const vec2f view_offset(p2.x, p.y);
           const vec2f view_scale(hImgSize.x, hImgSize.y);
-	
+    
           ImVec2 bbmin = ImGui::GetItemRectMin();
           ImVec2 bbmax = ImGui::GetItemRectMax();
           ImVec2 clipped_mouse_pos = ImVec2(std::min(std::max(io.MousePos.x, bbmin.x), bbmax.x),
@@ -725,47 +725,47 @@ void GLFWOSPWindow::buildUI(){
  	else invisible = false;
 	  
 	if(ImGui::Checkbox("set segment of this color invisible", &invisible)){
-	  if(invisible){
-	    // set from visible to invisible
-	    unsigned int currentCol[3] = {colSegImage[0]*255, colSegImage[1]*255, colSegImage[2]*255};
-	    unsigned int toCol[3] = {0 ,0, 0};
-	    segHist.setOutputImageFromSegImage(currentCol, toCol);
-	    for (int i=0; i<3; i++)
-	      colImage[i] = 0.f;
-	  }else{
-	    unsigned int currentCol[3] = {colSegImage[0]*255, colSegImage[1]*255, colSegImage[2]*255};
-	    segHist.setOutputImageFromSegImage(currentCol, currentCol);
-	    for (int i=0; i<3; i++)
-	      colImage[i] = colSegImage[i];
-	  }
+        if(invisible){
+            // set from visible to invisible
+            unsigned int currentCol[3] = {colSegImage[0]*255, colSegImage[1]*255, colSegImage[2]*255};
+            unsigned int toCol[3] = {0 ,0, 0};
+            segHist.setOutputImageFromSegImage(currentCol, toCol);
+            for (int i=0; i<3; i++)
+                colImage[i] = 0.f;
+        }else{
+            unsigned int currentCol[3] = {colSegImage[0]*255, colSegImage[1]*255, colSegImage[2]*255};
+            segHist.setOutputImageFromSegImage(currentCol, currentCol);
+            for (int i=0; i<3; i++)
+                colImage[i] = colSegImage[i];
+        }
 
-	  segHist.recreateImageTexture();
-	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
-	  renderer.commit();
+        segHist.recreateImageTexture();
+        renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+        renderer.commit();
 	}
 
 	//
 	ImGui::Checkbox("paint mode enable", &enablePainting); ImGui::SameLine();
 	if(ImGui::SmallButton("reset image")){
 	  
-	  segHist.loadImage(segHist.filename.c_str());
-	  segHist.recreateImageTexture();
-	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
-	  renderer.commit();
+        segHist.loadImage(segHist.filename.c_str());
+        segHist.recreateImageTexture();
+        renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+        renderer.commit();
 	  
 	} ImGui::SameLine();
 	if(ImGui::SmallButton("saveImage")){
-	  segHist.writeImage("writeImage.png");
+        segHist.writeImage("writeImage.png");
 	}
 	if (enablePainting){
-	  ImGui::SliderInt("radius", &brushRadius, 1, 20);
-	  ImGui::ColorEdit3("paint color", colorPaint);
-	  //std::cout << brushRadius <<"\n";
-	  ImDrawList* draw_list = ImGui::GetWindowDrawList();
-	  draw_list->AddCircle(ImVec2(io.MousePos.x, io.MousePos.y),
-			       brushRadius,
-	  		       ImColor(colorPaint[0], colorPaint[1],
-				       colorPaint[2], 1.0f));
+        ImGui::SliderInt("radius", &brushRadius, 1, 20);
+        ImGui::ColorEdit3("paint color", colorPaint);
+        //std::cout << brushRadius <<"\n";
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        draw_list->AddCircle(ImVec2(io.MousePos.x, io.MousePos.y),
+                             brushRadius,
+                             ImColor(colorPaint[0], colorPaint[1],
+                                     colorPaint[2], 1.0f));
 	  
 	}
 	
