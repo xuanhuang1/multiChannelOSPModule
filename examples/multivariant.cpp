@@ -60,7 +60,7 @@ using namespace rkcommon;
 using namespace rkcommon::math;
 
 // image size
-vec2i imgSize{400, 300};
+vec2i imgSize{800, 600};
 vec2i windowSize{800,600};
 unsigned int texture;
 unsigned int guiTextures[128];
@@ -128,7 +128,7 @@ public:
   std::vector<ospray::cpp::TransferFunction> distFuncs;
   std::vector<tfnw::TransferFunctionWidget> distFnWidgets;
   int blinkCounter = 0;
-  int blinkDuration = 30;
+  int blinkDuration = 10;
   bool inBlink = false;
   
   char imageFolderPath[256];
@@ -181,7 +181,18 @@ void GLFWOSPWindow::display()
    
    renderNewFrame();
    auto fb = framebuffer.map(OSP_FB_COLOR);
-  
+
+   if (1){ // weird dead pixel 
+     uint32_t testX = 133;
+     uint32_t testY = 94;
+     uint32_t testPixel = testY*imgSize.x*4 + testX*4;
+     for (int i=0; i<4; i++)
+         ((float*)fb)[testPixel+i] = ((float*)fb)[testPixel+i+4] ;
+     //((float*)fb)[testPixel] = 255;//((float*)fb)[testPixel+i+4]
+     //((float*)fb)[testPixel+1] = 255;//((float*)fb)[testPixel+i+4]
+     //((float*)fb)[testPixel+2] = 0;//((float*)fb)[testPixel+i+4]
+   }
+   
    glTexImage2D(GL_TEXTURE_2D,
 		0,
 		GL_RGBA32F,
@@ -258,8 +269,11 @@ void GLFWOSPWindow::buildUI(){
   static int whichSegmentRenderMode = 0;
   static float ratio = 0.5;
   static float alpha_scaler = 1;
+  static bool hist_seg_blend = false;
   static int num_of_seg = 4;
   static bool applyAllSegments;
+  static bool enablePainting = false;
+  
 	
   if (ImGui::Combo("tfn##whichtfnType",
 		   &whichtfnType,
@@ -397,20 +411,20 @@ void GLFWOSPWindow::buildUI(){
 	  
 	  }
       if (renderAttributeChanged){
-	// rebuild attribute list to render
-	std::vector<int> renderAttributes;
-        for (uint32_t i=0; i< renderAttributesData.size(); i++){
-	  if (renderAttributeSelection[i])
-	    renderAttributes.push_back(i);
-	}
+          // rebuild attribute list to render
+          std::vector<int> renderAttributes;
+          for (uint32_t i=0; i< renderAttributesData.size(); i++){
+              if (renderAttributeSelection[i])
+                  renderAttributes.push_back(i);
+          }
     
-	renderer.setParam("renderAttributes", ospray::cpp::CopiedData(renderAttributes));
-	renderer.commit();
+          renderer.setParam("renderAttributes", ospray::cpp::CopiedData(renderAttributes));
+          renderer.commit();
       }
 
       if (tfnsChanged){
-	renderer.setParam("transferFunctions", ospray::cpp::CopiedData(tfns)); 
-	renderer.commit();
+          renderer.setParam("transferFunctions", ospray::cpp::CopiedData(tfns)); 
+          renderer.commit();
       }
       
       ImGui::TreePop();
@@ -420,150 +434,161 @@ void GLFWOSPWindow::buildUI(){
   if (blendMode == 4){
     if (ImGui::TreeNode("Histogram Selection"))
     {
-      for (uint32_t n = 0; n < histograms.size(); n++){
-	if ((ImGui::Combo("channel_y##whichChannel0Hist"+n,
-			 (int*)(&histograms[n].ch_index_0),
-			 renderAttributeUI_callback,
-			 nullptr,
-			 renderAttributesData.size()))
-	  ||(ImGui::Combo("channel_x##whichChannel0Hist"+n,
-			 (int*)(&histograms[n].ch_index_1),
-			 renderAttributeUI_callback,
-			 nullptr,
-			  renderAttributesData.size())))
-	      {
-		histograms[n].makeImage();
-		histograms[n].recreateImageTexture();
-	      }
+        for (uint32_t n = 0; n < histograms.size(); n++){
+            if ((ImGui::Combo("channel_y##whichChannel0Hist"+n,
+                              (int*)(&histograms[n].ch_index_0),
+                              renderAttributeUI_callback,
+                              nullptr,
+                              renderAttributesData.size()))
+                ||(ImGui::Combo("channel_x##whichChannel0Hist"+n,
+                                (int*)(&histograms[n].ch_index_1),
+                                renderAttributeUI_callback,
+                                nullptr,
+                                renderAttributesData.size())))
+            {
+                histograms[n].makeImage();
+                histograms[n].recreateImageTexture();
+            }
 
-	// slider for ratio
-	// change rendering and imgui line
-	ImVec2 hImgSize(120, 120);
-	ImVec2 lineEndP(0,0);
-	if(ImGui::SliderFloat(("ratio y:x hist"+std::to_string(n)).c_str(),
-				&ratio, 0.001f, 0.999f)){
-	  histograms[n].ratio = ratio;
-	  renderAttributesWeights[histograms[n].ch_index_0] = renderAttributesWeights[histograms[n].ch_index_1] / tan(histograms[n].ratio * M_PI/2);
-	  renderer.setParam("renderAttributesWeights", ospray::cpp::CopiedData(renderAttributesWeights));
-	  renderer.commit();
-	}
+            // slider for ratio
+            // change rendering and imgui line
+            ImVec2 hImgSize(120, 120);
+            ImVec2 lineEndP(0,0);
+            if(ImGui::SliderFloat(("ratio y:x hist"+std::to_string(n)).c_str(),
+                                  &ratio, 0.001f, 0.999f)){
+                histograms[n].ratio = ratio;
+                renderAttributesWeights[histograms[n].ch_index_0] = renderAttributesWeights[histograms[n].ch_index_1] / tan(histograms[n].ratio * M_PI/2);
+                renderer.setParam("renderAttributesWeights", ospray::cpp::CopiedData(renderAttributesWeights));
+                renderer.commit();
+            }
 	
-	float img_k = hImgSize.y / hImgSize.x;
-	if (histograms[n].ratio > atan(img_k)/M_PI * 2 ){
-	  lineEndP.y = hImgSize.y;
-	  lineEndP.x = hImgSize.y / tan(histograms[n].ratio * M_PI/2);
-	}else{
-	  lineEndP.x = hImgSize.x;
-	  lineEndP.y = hImgSize.x * tan(histograms[n].ratio * M_PI/2);
-	}
-	// add histogram image 
-	ImVec2 p = ImGui::GetCursorScreenPos();
+            float img_k = hImgSize.y / hImgSize.x;
+            if (histograms[n].ratio > atan(img_k)/M_PI * 2 ){
+                lineEndP.y = hImgSize.y;
+                lineEndP.x = hImgSize.y / tan(histograms[n].ratio * M_PI/2);
+            }else{
+                lineEndP.x = hImgSize.x;
+                lineEndP.y = hImgSize.x * tan(histograms[n].ratio * M_PI/2);
+            }
+            // add histogram image 
+            ImVec2 p = ImGui::GetCursorScreenPos();
 	
-	ImGui::Image((void*)(intptr_t)histograms[n].texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
-	ImGui::GetWindowDrawList()->AddLine(ImVec2(p.x , p.y + hImgSize.y), ImVec2(p.x + lineEndP.x, p.y+ hImgSize.y - lineEndP.y), IM_COL32(255, 255, 255, 255), 3.0f);
-      }
-      ImGui::TreePop();
+            ImGui::Image((void*)(intptr_t)histograms[n].texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
+            ImGui::GetWindowDrawList()->AddLine(ImVec2(p.x , p.y + hImgSize.y), ImVec2(p.x + lineEndP.x, p.y+ hImgSize.y - lineEndP.y), IM_COL32(255, 255, 255, 255), 3.0f);
+        }
+        ImGui::TreePop();
     }
   }
   
   if (blendMode == 5){
     if (ImGui::TreeNode("External Segmentation"))
       {
-        if (ImGui::SliderInt("number of segments", &num_of_seg, 4, 14)){
-	  char filename[512], imageFixName[256];
-	  sprintf(imageFixName, imageNameString, num_of_seg);
-	  sprintf(filename, "%s%s", imageFolderPath, imageFixName);
-	  segHist.loadImage(filename);
-	  sprintf(imageFixName, distImageNameString, num_of_seg);
-	  sprintf(filename, "%s%s", imageFolderPath, imageFixName);
-	  segHist.loadDistImage(filename);
-	  segHist.applyDistAsAlpha();
-	  segHist.recreateImageTexture();
+          if (ImGui::SliderInt("number of segments", &num_of_seg, 4, 14)){
+              char filename[512], imageFixName[256];
+              sprintf(imageFixName, imageNameString, num_of_seg);
+              sprintf(filename, "%s%s", imageFolderPath, imageFixName);
+              segHist.loadImage(filename);
+              sprintf(imageFixName, distImageNameString, num_of_seg);
+              sprintf(filename, "%s%s", imageFolderPath, imageFixName);
+              segHist.loadDistImage(filename);
+              segHist.applyDistAsAlpha();
+              segHist.recreateImageTexture();
+              hist_seg_blend = false;
 	  
-	  distFnWidgets.resize(segHist.colorSegIDMap.size());
-	  distFuncs.clear();
-	  distFuncs.resize(0);
-	  for (uint32_t i=0; i<segHist.colorSegIDMap.size(); i++)
-	    distFuncs.push_back(makeTransferFunctionForColor(vec2f(0.f, 1.f), vec3f(1,1,1)));
+              distFnWidgets.resize(segHist.colorSegIDMap.size());
+              distFuncs.clear();
+              distFuncs.resize(0);
+              for (uint32_t i=0; i<segHist.colorSegIDMap.size(); i++)
+                  distFuncs.push_back(makeTransferFunctionForColor(vec2f(0.f, 1.f), vec3f(1,1,1)));
 
-	  renderer.setParam("distanceFunctions", ospray::cpp::CopiedData(distFuncs));
-	  renderer.setParam("segColWithAlphaModifier", ospray::cpp::CopiedData(segHist.getSegColWithAlphaModifier()));
+              renderer.setParam("distanceFunctions", ospray::cpp::CopiedData(distFuncs));
+              renderer.setParam("segColWithAlphaModifier", ospray::cpp::CopiedData(segHist.getSegColWithAlphaModifier()));
 
-	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
-	  renderer.commit();
+              renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+              renderer.commit();
 	  
-	}
-	if (ImGui::Combo("shadeMode##whichShadeMode",
-			 &whichShadeMode,
-			 shadeModeUI_callback,
-			 nullptr,
-			 shadeModeStr.size())) {
-	  shadeMode = whichShadeMode;
-	  renderer.setParam("shadeMode", shadeMode); 
-	  renderer.commit();
-	}
+          }
+          if (ImGui::Combo("shadeMode##whichShadeMode",
+                           &whichShadeMode,
+                           shadeModeUI_callback,
+                           nullptr,
+                           shadeModeStr.size())) {
+              shadeMode = whichShadeMode;
+              renderer.setParam("shadeMode", shadeMode); 
+              renderer.commit();
+          }
 		
-	if (ImGui::Combo("segmentRenderMode##whichSegmentRenderMode",
-			 &whichSegmentRenderMode,
-			 segmentRenderModeUI_callback,
-			 nullptr,
-			 segmentRenderModeStr.size())) {
-	  segmentRenderMode  = whichSegmentRenderMode;
-	  renderer.setParam("segmentRenderMode", segmentRenderMode); 
-	  renderer.commit();
-	}
+          if (ImGui::Combo("segmentRenderMode##whichSegmentRenderMode",
+                           &whichSegmentRenderMode,
+                           segmentRenderModeUI_callback,
+                           nullptr,
+                           segmentRenderModeStr.size())) {
+              segmentRenderMode  = whichSegmentRenderMode;
+              renderer.setParam("segmentRenderMode", segmentRenderMode); 
+              renderer.commit();
+          }
+
 	
-      	// add histogram image 
-	ImVec2 p = ImGui::GetCursorScreenPos();
-	ImVec2 hImgSize(120, 120);
-	ImGui::Image((void*)(intptr_t)histograms[0].texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
-	ImGui::SameLine(hImgSize.x + 50);
-	ImVec2 p2 = ImGui::GetCursorScreenPos();
-	ImGui::Image((void*)(intptr_t)segHist.segTexName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
+          // add histogram image 
+          ImVec2 p = ImGui::GetCursorScreenPos();
+          ImVec2 hImgSize(120, 120);
+          ImGui::Image((void*)(intptr_t)histograms[0].texName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
+          ImGui::SameLine(hImgSize.x + 50);
+          ImVec2 p2 = ImGui::GetCursorScreenPos();
+          ImGui::Image((void*)(intptr_t)segHist.segTexName, hImgSize, ImVec2(0,0), ImVec2(1,-1));
 
 
-	const ImGuiIO &io = ImGui::GetIO();
-	bool clicked_on_item = false;
-	bool right_click = false;
-	bool left_click = false;
+          const ImGuiIO &io = ImGui::GetIO();
+          bool clicked_on_item = false;
+          bool right_click = false;
+          bool left_click = false;
 	
-	if (ImGui::IsItemHovered() && (io.MouseDown[0] || io.MouseDown[1])) {
-	  clicked_on_item = true;
-	  if (io.MouseDown[1]) right_click = true;
-	  if (io.MouseDown[0]) left_click = true;
-	}
+          if (ImGui::IsItemHovered() && (io.MouseDown[0] || io.MouseDown[1])) {
+              clicked_on_item = true;
+              if (io.MouseDown[1]) right_click = true;
+              if (io.MouseDown[0]) left_click = true;
+          }
 
-	const vec2f view_offset(p2.x, p.y);
-	const vec2f view_scale(hImgSize.x, hImgSize.y);
+          const vec2f view_offset(p2.x, p.y);
+          const vec2f view_scale(hImgSize.x, hImgSize.y);
 	
-	ImVec2 bbmin = ImGui::GetItemRectMin();
-	ImVec2 bbmax = ImGui::GetItemRectMax();
-	ImVec2 clipped_mouse_pos = ImVec2(std::min(std::max(io.MousePos.x, bbmin.x), bbmax.x),
-					  std::min(std::max(io.MousePos.y, bbmin.y), bbmax.y));
-	static float colSegImage[3];
-	static float colActive[3];
-	static float colImage[3];
-	static float colFocus[3];
-	static bool focusEnable;
+          ImVec2 bbmin = ImGui::GetItemRectMin();
+          ImVec2 bbmax = ImGui::GetItemRectMax();
+          ImVec2 clipped_mouse_pos = ImVec2(std::min(std::max(io.MousePos.x, bbmin.x), bbmax.x),
+                                            std::min(std::max(io.MousePos.y, bbmin.y), bbmax.y));
+          static float colSegImage[3];
+          static float colActive[3];
+          static float colImage[3];
+          static float colFocus[3];
+          static bool focusEnable;
+          static float colorPaint[3];
+          static int brushRadius = 5;
+          
+          if (ImGui::Checkbox("hist seg blend", &hist_seg_blend)){
+              segHist.multHistAsAlpha(histograms[0], hist_seg_blend);
+                  
+              segHist.recreateImageTexture();
+              std::cout << "blend histogram and segmentation display" <<std::endl;
+          }
+              
+          if (ImGui::Checkbox("right click focus mode enable", &focusEnable)){
+              if (!focusEnable){
+                  segHist.applyDistAsAlpha();
+                  segHist.recreateImageTexture();
+                  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+                  renderer.commit();
+              }
+          }
 
-	if (ImGui::Checkbox("right click focus mode enable", &focusEnable)){
-	  if (!focusEnable){
-	    segHist.applyDistAsAlpha();
-	    segHist.recreateImageTexture();
-	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
-	    renderer.commit();
-	  }
-	}
-
-	if ((inBlink) && (blinkCounter >= blinkDuration )){
-	  std::cout << "end blink\n";
-	  inBlink = false;
-	  blinkCounter = 0;
-	  segHist.applyDistAsAlpha();
-	    segHist.recreateImageTexture();
-	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
-	    renderer.commit();
-	}
+          if ((inBlink) && (blinkCounter >= blinkDuration )){
+              std::cout << "end blink\n";
+              inBlink = false;
+              blinkCounter = 0;
+              segHist.applyDistAsAlpha();
+              segHist.recreateImageTexture();
+              renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+              renderer.commit();
+          }
 	  
 	
 	if (clicked_on_item) {
@@ -585,60 +610,84 @@ void GLFWOSPWindow::buildUI(){
 	  colImage[2] = int(segHist.image[color_index + 2])/255.f;
 
 	  for (int i=0; i<3; i++)
-	    colActive[i] = colSegImage[i];
+          colActive[i] = colSegImage[i];
 
-	  if (left_click && (!inBlink)){
-	    inBlink = true;
-	    blinkCounter = 0;
-	    for (int m =0; m <segHist.width*segHist.height; m++){
-	      bool color_equal = true;
-	      int color_index = m*segHist.nChannels;
-	      for (int i=0; i<3; i++){
-		if(segHist.segImage[color_index+i] != int(colActive[i]*255)){
-		  color_equal = false;
-		}
-	      }
-	      if (color_equal){
-		segHist.image[color_index+3] = 255;
-	      }else{
-		segHist.image[color_index+3] = 0;
-	      }
-	    }
-	    for (int i=0; i<3; i++)
-	      colFocus[i] = colActive[i];
+	  if (left_click && (!inBlink) && (!enablePainting)){
+          inBlink = true;
+          blinkCounter = 0;
+          for (int m =0; m <segHist.width*segHist.height; m++){
+              bool color_equal = true;
+              int color_index = m*segHist.nChannels;
+              for (int i=0; i<3; i++){
+                  if(segHist.segImage[color_index+i] != int(colActive[i]*255)){
+                      color_equal = false;
+                  }
+              }
+              if (color_equal){
+                  segHist.image[color_index+3] = 255;
+              }else{
+                  segHist.image[color_index+3] = 0;
+              }
+          }
+          for (int i=0; i<3; i++)
+              colFocus[i] = colActive[i];
 	    
 	    	  
-	    segHist.recreateImageTexture();
-	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
-	    renderer.commit();
+          segHist.recreateImageTexture();
+          renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+          renderer.commit();
 	  }
-	
-	  
-	  if (right_click && focusEnable){
-	    if( (colFocus[0] != colActive[0]) ||
-		(colFocus[1] != colActive[1]) ||
-		(colFocus[2] != colActive[2])) {
-	      for (int m =0; m <segHist.width*segHist.height; m++){
-		bool color_equal = true;
-		int color_index = m*segHist.nChannels;
-		for (int i=0; i<3; i++){
-		  if(segHist.segImage[color_index+i] != int(colActive[i]*255)){
-		    color_equal = false;
-		  }
-		}
-		if (color_equal){
-		  segHist.image[color_index+3] = 255;
-		}else{
-		  segHist.image[color_index+3] = 0;
-		}
-	      }
-	      for (int i=0; i<3; i++)
-		colFocus[i] = colActive[i];
-	    }
+	  else if (right_click && focusEnable){
+          if( (colFocus[0] != colActive[0]) ||
+              (colFocus[1] != colActive[1]) ||
+              (colFocus[2] != colActive[2])) {
+              for (int m =0; m <segHist.width*segHist.height; m++){
+                  bool color_equal = true;
+                  int color_index = m*segHist.nChannels;
+                  for (int i=0; i<3; i++){
+                      if(segHist.segImage[color_index+i] != int(colActive[i]*255)){
+                          color_equal = false;
+                      }
+                  }
+                  if (color_equal){
+                      segHist.image[color_index+3] = 255;
+                  }else{
+                      segHist.image[color_index+3] = 0;
+                  }
+              }
+              for (int i=0; i<3; i++)
+                  colFocus[i] = colActive[i];
+          }
 	    	  
-	    segHist.recreateImageTexture();
-	    renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
-	    renderer.commit();
+          segHist.recreateImageTexture();
+          renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+          renderer.commit();
+	  }else if (left_click && enablePainting){
+          std::cout << "["<<mouse_pos.x <<" "<<mouse_pos.y<<"]: " 
+                    << colorPaint[0] <<" "<<colorPaint[1]<<" "<<colorPaint[2]
+                    <<"\n";
+          for (int i=0; i<brushRadius*2; i++){
+              for (int j=0; j<brushRadius*2; j++){
+                  int imageX = clamp(int(mouse_pos.x)-brushRadius+i, 0, segHist.width); 
+                  int imageY = clamp(int(mouse_pos.y)-brushRadius+j, 0, segHist.height);
+                  int color_index = imageY*segHist.width*segHist.nChannels
+                      + imageX*segHist.nChannels;
+                  if ((segHist.segImage[color_index+0] != 0) &&
+                      (segHist.segImage[color_index+1] != 0) &&
+                      (segHist.segImage[color_index+2] != 0)){
+                      for (int k=0; k<3; k++){
+                          if ( pow(i-brushRadius, 2) + pow(j-brushRadius, 2)
+                               < brushRadius*brushRadius  ){
+                              segHist.segImage[color_index+k] = int(colorPaint[k]*255);
+                              segHist.image[color_index+k] = int(colorPaint[k]*255);
+                          }
+                      }
+                  }
+              }
+          }
+          segHist.recreateImageTexture();
+          renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+          renderer.commit();
 	  }
 	  
 	}
@@ -653,9 +702,9 @@ void GLFWOSPWindow::buildUI(){
 	    }
 	    if (color_equal){
 	      for (int i=0; i<3; i++){
-		segHist.segImage[m*segHist.nChannels+i] = int(colSegImage[i]*255);
-		segHist.image[m*segHist.nChannels+i] = int(colSegImage[i]*255);
-		colImage[i] = int(segHist.image[m*segHist.nChannels+i])/255.f;
+              segHist.segImage[m*segHist.nChannels+i] = int(colSegImage[i]*255);
+              segHist.image[m*segHist.nChannels+i] = int(colSegImage[i]*255);
+              colImage[i] = int(segHist.image[m*segHist.nChannels+i])/255.f;
 	      }
 	    }
 	  }
@@ -675,7 +724,7 @@ void GLFWOSPWindow::buildUI(){
 	if ((!colImage[0]) && (!colImage[1]) && (!colImage[2])){ invisible = true;}
  	else invisible = false;
 	  
-	if(ImGui::Checkbox("set invisible", &invisible)){
+	if(ImGui::Checkbox("set segment of this color invisible", &invisible)){
 	  if(invisible){
 	    // set from visible to invisible
 	    unsigned int currentCol[3] = {colSegImage[0]*255, colSegImage[1]*255, colSegImage[2]*255};
@@ -694,10 +743,34 @@ void GLFWOSPWindow::buildUI(){
 	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
 	  renderer.commit();
 	}
-	
-	
 
-	if (ImGui::TreeNode("opacity function (click on segment to select)")){ 
+	//
+	ImGui::Checkbox("paint mode enable", &enablePainting); ImGui::SameLine();
+	if(ImGui::SmallButton("reset image")){
+	  
+	  segHist.loadImage(segHist.filename.c_str());
+	  segHist.recreateImageTexture();
+	  renderer.setParam("histMaskTexture", ospray::cpp::CopiedData(segHist.image));
+	  renderer.commit();
+	  
+	} ImGui::SameLine();
+	if(ImGui::SmallButton("saveImage")){
+	  segHist.writeImage("writeImage.png");
+	}
+	if (enablePainting){
+	  ImGui::SliderInt("radius", &brushRadius, 1, 20);
+	  ImGui::ColorEdit3("paint color", colorPaint);
+	  //std::cout << brushRadius <<"\n";
+	  ImDrawList* draw_list = ImGui::GetWindowDrawList();
+	  draw_list->AddCircle(ImVec2(io.MousePos.x, io.MousePos.y),
+			       brushRadius,
+	  		       ImColor(colorPaint[0], colorPaint[1],
+				       colorPaint[2], 1.0f));
+	  
+	}
+	
+	// disable opacity function for now
+	if (0 && ImGui::TreeNode("opacity function (click on segment to select)")){ 
 	  // distance function widget
 	  int l = segHist.getColorSegID(col_to_int);
 	  if ((l >= 0) && (l < segHist.colorSegIDMap.size()))

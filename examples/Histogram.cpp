@@ -1,6 +1,8 @@
 #include "Histogram.h"
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
+#include "stb_image_write.h"
 #include <iostream>
 
 
@@ -71,10 +73,10 @@ void Histogram::makeImage()
        float c_f = std::log(image_f[i][j]) / std::log(maxCount);
        uint32_t c = c_f*255.f;
        if (c == 0) {
-	 image[i][j][0] = (GLubyte)100;
-	 image[i][j][1] = (GLubyte)100;
-	 image[i][j][2] = (GLubyte)100;
-	 continue;
+           image[i][j][0] = (GLubyte)100;
+           image[i][j][1] = (GLubyte)100;
+           image[i][j][2] = (GLubyte)100;
+           continue;
        }
        image[i][j][0] = (GLubyte) c;
        image[i][j][1] = (GLubyte) 0;
@@ -119,12 +121,16 @@ void Histogram::recreateImageTexture(){
 	       image);
 }
 
+void SegHistogram::writeImage(const char* filename){
+  stbi_write_png(filename, width, height, 4, &segImage[0], width*4);
+  std::cout << "wrote to image: "<< filename<<"\n";
+}
 
-
-void SegHistogram::loadImage(char* filename){
+void SegHistogram::loadImage(const char* filename){
   int read_nChannels;
-  filename = filename;
-    
+  this->filename = filename;
+  std::cout << "load image:" << this->filename<<"\n";
+  
   unsigned char* image_read = stbi_load(filename, &width, &height, &read_nChannels, 0);
   std::cout <<"mask image: "<<width <<"x"<<height <<"x"<<read_nChannels <<" \n";
 
@@ -294,9 +300,40 @@ void SegHistogram::applyDistAsAlpha(){
   }
   for (int i=0; i<height; i++)
       for (int j=0; j<width; j++)
-	image[i*width*nChannels + j*nChannels + 3] = distImage[i*width*nChannels + j*nChannels];
-
+	image[i*width*nChannels + j*nChannels + 3] = 255;//distImage[i*width*nChannels + j*nChannels];
+  std::cout << "ignore distance image, apply uniform \n";
 }
+
+
+void SegHistogram::multHistAsAlpha(Histogram &hist, bool apply){
+     for (int i=0; i<height; i++){
+        for (int j=0; j<width; j++){
+            uint32_t hist_i = (i+0.f)/height*HistImageHeight;
+            uint32_t hist_j = (j+0.f)/width*HistImageWidth;
+            uint32_t color_index = i*width*nChannels + j*nChannels;
+            if (!apply){
+                segImage[color_index + 0] = image[color_index];
+                segImage[color_index + 1] = image[color_index + 1];
+                segImage[color_index + 2] = image[color_index + 2];
+                segImage[color_index + 3] = 255;
+            }else{
+                if ((hist.image[hist_i][hist_j][0] == (GLubyte)100) &&
+                    (hist.image[hist_i][hist_j][1] == (GLubyte)100) &&
+                    (hist.image[hist_i][hist_j][2] == (GLubyte)100)){
+                    segImage[color_index + 0] = 0;
+                    segImage[color_index + 1] = 0;
+                    segImage[color_index + 2] = 0;
+                }
+                else
+                {
+                    //segImage[i*width*nChannels + j*nChannels + 3] =
+                    //    image[i*width*nChannels + j*nChannels + 3] / 255.f * hist.image[hist_i][hist_j][0];
+                }
+            }
+        }
+    }
+}
+
 
 void SegHistogram::scaleAlphaForPixel(float scale, int col_index){
   if ((!distImage.size()) || (!image.size())){
