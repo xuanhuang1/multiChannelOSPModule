@@ -15,4 +15,4 @@ build with:
  - ispc 1.16.0
  
  run with:
- ./ospTutorial_mtvCpp <raw vol filename> x y z n_of_channels <image Folder Path>
+ 	./ospTutorial_mtvCpp filename x y z n_of_channels imageFolderPath
